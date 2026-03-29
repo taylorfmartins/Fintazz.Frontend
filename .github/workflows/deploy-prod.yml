@@ -34,29 +34,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Copy docker-compose to VPS
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          source: docker-compose.prod.yml
-          target: ~/fintazz-frontend/production/
-
-      - name: Pull and restart
+      - name: Write compose file, pull and restart
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
+          username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
           envs: GHCR_TOKEN,GHCR_USER
           script: |
+            mkdir -p ~/fintazz-frontend/production
+            cat > ~/fintazz-frontend/production/docker-compose.prod.yml << 'COMPOSE'
+            services:
+              frontend:
+                image: ghcr.io/taylorfmartins/fintazz-frontend:latest
+                container_name: fintazz-frontend
+                ports:
+                  - "3000:80"
+                env_file: .env
+                restart: unless-stopped
+            COMPOSE
+
             cd ~/fintazz-frontend/production
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
         env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           GHCR_USER: ${{ github.actor }}
