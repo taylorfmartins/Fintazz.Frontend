@@ -8,16 +8,13 @@ env:
   IMAGE: ghcr.io/taylorfmartins/fintazz-frontend
 
 jobs:
-  build-push:
-    name: Build & Push
+  retag:
+    name: Retag :dev as :latest
     runs-on: ubuntu-latest
     permissions:
-      contents: read
       packages: write
 
     steps:
-      - uses: actions/checkout@v4
-
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -25,16 +22,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: ${{ env.IMAGE }}:latest
+      - name: Retag dev image as latest
+        run: |
+          docker pull ${{ env.IMAGE }}:dev
+          docker tag  ${{ env.IMAGE }}:dev ${{ env.IMAGE }}:latest
+          docker push ${{ env.IMAGE }}:latest
 
   deploy:
     name: Deploy to VPS
-    needs: build-push
+    needs: retag
     runs-on: ubuntu-latest
 
     steps:
