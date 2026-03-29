@@ -1,0 +1,234 @@
+@page "/"
+@layout LandingLayout
+@attribute [AllowAnonymous]
+
+<PageTitle>Fintazz — Controle financeiro inteligente</PageTitle>
+
+@* ═══════════════════════════════════════════════════════════
+   HERO
+   ═══════════════════════════════════════════════════════════ *@
+<section class="landing-hero">
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="text-center">
+        <MudText Typo="Typo.h2" Class="fw-bold landing-hero-title">
+            Suas finanças no controle,<br />
+            <span class="text-gradient">sua família em sintonia.</span>
+        </MudText>
+        <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mt-4 landing-hero-subtitle">
+            O Fintazz é uma plataforma colaborativa de gestão financeira
+            pensada para quem quer organizar gastos pessoais e familiares
+            em um único lugar — com clareza, simplicidade e sem planilhas.
+        </MudText>
+        <div class="d-flex justify-center gap-3 mt-6 flex-wrap">
+            <MudButton Href="/cadastro" Variant="Variant.Filled" Color="Color.Primary"
+                       Size="Size.Large" EndIcon="@Icons.Material.Rounded.ArrowForward">
+                Criar conta grátis
+            </MudButton>
+            <MudButton Href="/login" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large">
+                Já tenho conta
+            </MudButton>
+        </div>
+    </MudContainer>
+</section>
+
+@* ═══════════════════════════════════════════════════════════
+   PROBLEMA & SOLUÇÃO
+   ═══════════════════════════════════════════════════════════ *@
+<section class="landing-section">
+    <MudContainer MaxWidth="MaxWidth.Large">
+        <MudText Typo="Typo.h4" Align="Align.Center" Class="fw-bold mb-2">
+            Por que o Fintazz existe?
+        </MudText>
+        <MudText Typo="Typo.body1" Align="Align.Center" Color="Color.Secondary" Class="mb-8" Style="max-width:640px;margin:0 auto">
+            Planilhas viram bagunça. Apps genéricos ignoram a dinâmica familiar.
+            O Fintazz nasceu para resolver isso: um controle financeiro que a família inteira
+            consegue usar — junto.
+        </MudText>
+
+        <MudGrid Justify="Justify.Center" Spacing="4">
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Elevation="0" Class="landing-card h-100">
+                    <MudCardContent Class="text-center pa-6">
+                        <MudIcon Icon="@Icons.Material.Rounded.VisibilityOff" Color="Color.Error"
+                                 Size="Size.Large" Class="mb-3" />
+                        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-2">Falta de visibilidade</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Sem um painel claro, é difícil saber para onde o dinheiro vai todos os meses.
+                        </MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Elevation="0" Class="landing-card h-100">
+                    <MudCardContent Class="text-center pa-6">
+                        <MudIcon Icon="@Icons.Material.Rounded.GroupOff" Color="Color.Warning"
+                                 Size="Size.Large" Class="mb-3" />
+                        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-2">Gestão isolada</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Cada membro da família controla suas finanças de um jeito, sem um ponto em comum.
+                        </MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Elevation="0" Class="landing-card h-100">
+                    <MudCardContent Class="text-center pa-6">
+                        <MudIcon Icon="@Icons.Material.Rounded.EventRepeat" Color="Color.Info"
+                                 Size="Size.Large" Class="mb-3" />
+                        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-2">Gastos esquecidos</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Assinaturas e contas recorrentes passam despercebidas até estourar o orçamento.
+                        </MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    </MudContainer>
+</section>
+
+@* ═══════════════════════════════════════════════════════════
+   FEATURES
+   ═══════════════════════════════════════════════════════════ *@
+<section class="landing-section landing-section-alt">
+    <MudContainer MaxWidth="MaxWidth.Large">
+        <MudText Typo="Typo.h4" Align="Align.Center" Class="fw-bold mb-2">
+            Tudo que você precisa
+        </MudText>
+        <MudText Typo="Typo.body1" Align="Align.Center" Color="Color.Secondary" Class="mb-8">
+            Ferramentas pensadas para o dia a dia financeiro real.
+        </MudText>
+
+        <MudGrid Spacing="4">
+            @foreach (var f in _features)
+            {
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="0" Class="landing-card h-100">
+                        <MudCardContent Class="pa-6">
+                            <div class="d-flex align-center gap-3 mb-3">
+                                <MudAvatar Color="@f.AvatarColor" Variant="Variant.Filled" Size="Size.Medium"
+                                           Class="landing-feature-avatar">
+                                    <MudIcon Icon="@f.Icon" Size="Size.Small" />
+                                </MudAvatar>
+                                <MudText Typo="Typo.subtitle1" Class="fw-bold">@f.Title</MudText>
+                            </div>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                @f.Description
+                            </MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    </MudContainer>
+</section>
+
+@* ═══════════════════════════════════════════════════════════
+   COMO FUNCIONA
+   ═══════════════════════════════════════════════════════════ *@
+<section class="landing-section">
+    <MudContainer MaxWidth="MaxWidth.Medium">
+        <MudText Typo="Typo.h4" Align="Align.Center" Class="fw-bold mb-2">
+            Comece em 3 passos
+        </MudText>
+        <MudText Typo="Typo.body1" Align="Align.Center" Color="Color.Secondary" Class="mb-8">
+            Sem configuração complexa. Sem cartão de crédito.
+        </MudText>
+
+        <MudTimeline TimelinePosition="TimelinePosition.Start">
+            <MudTimelineItem Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium">
+                <ItemContent>
+                    <MudText Typo="Typo.subtitle1" Class="fw-bold">Crie sua conta</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Cadastro rápido com e-mail e senha. Sem burocracia.
+                    </MudText>
+                </ItemContent>
+            </MudTimelineItem>
+            <MudTimelineItem Color="Color.Secondary" Variant="Variant.Filled" Size="Size.Medium">
+                <ItemContent>
+                    <MudText Typo="Typo.subtitle1" Class="fw-bold">Monte seu grupo familiar</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Convide quem quiser — parceiro, filhos, pais. Cada um com seu acesso.
+                    </MudText>
+                </ItemContent>
+            </MudTimelineItem>
+            <MudTimelineItem Color="Color.Tertiary" Variant="Variant.Filled" Size="Size.Medium">
+                <ItemContent>
+                    <MudText Typo="Typo.subtitle1" Class="fw-bold">Controle suas finanças</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Registre transações, acompanhe o dashboard e tome decisões com clareza.
+                    </MudText>
+                </ItemContent>
+            </MudTimelineItem>
+        </MudTimeline>
+    </MudContainer>
+</section>
+
+@* ═══════════════════════════════════════════════════════════
+   CTA FINAL
+   ═══════════════════════════════════════════════════════════ *@
+<section class="landing-cta">
+    <MudContainer MaxWidth="MaxWidth.Small" Class="text-center">
+        <MudText Typo="Typo.h4" Class="fw-bold mb-3">
+            Pronto para organizar suas finanças?
+        </MudText>
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-6">
+            Junte sua família e comece a ter controle real sobre o dinheiro de vocês.
+        </MudText>
+        <MudButton Href="/cadastro" Variant="Variant.Filled" Color="Color.Primary"
+                   Size="Size.Large" EndIcon="@Icons.Material.Rounded.ArrowForward">
+            Começar agora
+        </MudButton>
+    </MudContainer>
+</section>
+
+@* ═══════════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════════ *@
+<footer class="landing-footer">
+    <MudContainer MaxWidth="MaxWidth.Large">
+        <div class="d-flex justify-space-between align-center flex-wrap gap-2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                &copy; @DateTime.Today.Year Fintazz. Todos os direitos reservados.
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Feito com dedicação para famílias brasileiras.
+            </MudText>
+        </div>
+    </MudContainer>
+</footer>
+
+@code {
+    private record Feature(string Icon, string Title, string Description, Color AvatarColor);
+
+    private readonly Feature[] _features =
+    [
+        new(Icons.Material.Rounded.Dashboard,
+            "Dashboard inteligente",
+            "Receitas, despesas, saldo e faturas do mês em uma visão clara e objetiva.",
+            Color.Primary),
+
+        new(Icons.Material.Rounded.Groups,
+            "Grupos familiares",
+            "Crie grupos, convide membros e compartilhe o controle financeiro sem complicação.",
+            Color.Secondary),
+
+        new(Icons.Material.Rounded.AccountBalance,
+            "Contas bancárias",
+            "Cadastre suas contas e acompanhe o saldo total consolidado em tempo real.",
+            Color.Tertiary),
+
+        new(Icons.Material.Rounded.CreditCard,
+            "Cartões de crédito",
+            "Registre cartões, acompanhe faturas e nunca mais se surpreenda na hora de pagar.",
+            Color.Warning),
+
+        new(Icons.Material.Rounded.Category,
+            "Categorias personalizadas",
+            "Organize transações do seu jeito — alimentação, moradia, lazer e o que mais precisar.",
+            Color.Info),
+
+        new(Icons.Material.Rounded.Repeat,
+            "Transações recorrentes",
+            "Automatize o registro de gastos fixos como aluguel, streaming e seguros.",
+            Color.Success)
+    ];
+}

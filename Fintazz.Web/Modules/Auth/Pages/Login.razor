@@ -90,6 +90,6 @@
 
         await TokenStorage.SaveTokensAsync(result.Value!.AccessToken, result.Value.RefreshToken);
         AuthStateProvider.NotifyUserLoggedIn(result.Value.AccessToken);
-        Navigation.NavigateTo("/");
+        Navigation.NavigateTo("/dashboard");
     }
 }

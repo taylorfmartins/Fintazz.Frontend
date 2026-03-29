@@ -1,17 +1,83 @@
-@page "/"
+@page "/dashboard"
 @inject DashboardService DashboardService
+@inject HouseHoldService HouseHoldService
 @inject AppState AppState
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject IJSRuntime JS
 
 <PageTitle>Dashboard — Fintazz</PageTitle>
 
 @if (!AppState.HasHouseHold)
 {
-    <MudAlert Severity="Severity.Info" Class="mb-4">
-        Nenhum grupo familiar selecionado.
-        <MudLink Href="/grupos" Class="ml-1">Selecionar ou criar grupo</MudLink>
-    </MudAlert>
+    <div class="d-flex flex-column align-center justify-center" style="min-height:60vh">
+        @if (_setupLoading)
+        {
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        }
+        else if (_availableGroups.Count == 0)
+        {
+            @* Nenhum grupo — onboarding de primeiro uso *@
+            <MudIcon Icon="@Icons.Material.Rounded.Diversity3" Color="Color.Primary"
+                     Style="font-size:4rem" Class="mb-4" />
+            <MudText Typo="Typo.h5" Class="fw-bold mb-2" Align="Align.Center">
+                Bem-vindo ao Fintazz!
+            </MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary" Align="Align.Center"
+                     Style="max-width:420px" Class="mb-6">
+                Para começar, crie seu primeiro grupo familiar.
+                É nele que você vai organizar contas, cartões e transações.
+            </MudText>
+
+            <MudPaper Class="pa-4" Elevation="0" Style="width:100%;max-width:400px;border:1px dashed var(--mud-palette-primary)">
+                <MudTextField @bind-Value="_newGroupName" Label="Nome do grupo" Placeholder="Ex: Família Silva"
+                              Variant="Variant.Outlined" Class="mb-3" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                           Disabled="@(string.IsNullOrWhiteSpace(_newGroupName) || _setupSaving)"
+                           OnClick="CreateAndSelectGroup"
+                           StartIcon="@Icons.Material.Rounded.Add">
+                    @if (_setupSaving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+                    Criar grupo
+                </MudButton>
+            </MudPaper>
+        }
+        else
+        {
+            @* Tem grupos mas nenhum selecionado — deixar escolher *@
+            <MudIcon Icon="@Icons.Material.Rounded.Groups" Color="Color.Primary"
+                     Style="font-size:4rem" Class="mb-4" />
+            <MudText Typo="Typo.h5" Class="fw-bold mb-2" Align="Align.Center">
+                Selecione um grupo
+            </MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary" Align="Align.Center" Class="mb-6">
+                Escolha o grupo familiar que deseja visualizar.
+            </MudText>
+
+            <MudGrid Justify="Justify.Center" Spacing="3" Style="max-width:600px">
+                @foreach (var g in _availableGroups)
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudCard Elevation="2" Class="cursor-pointer" Style="cursor:pointer"
+                                 @onclick="@(() => QuickSelectGroup(g))">
+                            <MudCardContent Class="text-center pa-4">
+                                <MudIcon Icon="@Icons.Material.Rounded.Groups" Color="Color.Primary" Class="mb-2" />
+                                <MudText Typo="Typo.subtitle1" Class="fw-bold">@g.Name</MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                }
+                <MudItem xs="12" sm="6">
+                    <MudCard Elevation="0" Style="border:1px dashed var(--mud-palette-text-secondary);cursor:pointer"
+                             @onclick="@(() => Navigation.NavigateTo("/grupos"))">
+                        <MudCardContent Class="text-center pa-4">
+                            <MudIcon Icon="@Icons.Material.Rounded.Add" Color="Color.Default" Class="mb-2" />
+                            <MudText Typo="Typo.subtitle1" Color="Color.Secondary">Novo grupo</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>
+        }
+    </div>
     return;
 }
 
@@ -127,10 +193,64 @@ else if (_data is not null)
     private readonly System.Globalization.CultureInfo _ptBr =
         System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
 
+    // Setup / onboarding
+    private List<HouseHoldResponse> _availableGroups = [];
+    private bool _setupLoading;
+    private bool _setupSaving;
+    private string _newGroupName = string.Empty;
+
     protected override async Task OnInitializedAsync()
     {
         if (AppState.HasHouseHold)
+        {
             await LoadAsync();
+        }
+        else
+        {
+            await LoadGroupsForSetupAsync();
+        }
+    }
+
+    private async Task LoadGroupsForSetupAsync()
+    {
+        _setupLoading = true;
+        var result = await HouseHoldService.GetAllAsync();
+        _setupLoading = false;
+
+        if (!result.IsSuccess) return;
+        _availableGroups = result.Value!;
+
+        // Auto-seleciona se tem apenas 1 grupo
+        if (_availableGroups.Count == 1)
+        {
+            await QuickSelectGroup(_availableGroups[0]);
+        }
+    }
+
+    private async Task QuickSelectGroup(HouseHoldResponse g)
+    {
+        AppState.SetHouseHold(g.Id, g.Name ?? string.Empty);
+        await JS.InvokeVoidAsync("localStorage.setItem", "fintazz_household_id", g.Id.ToString());
+        await JS.InvokeVoidAsync("localStorage.setItem", "fintazz_household_name", g.Name ?? string.Empty);
+        await LoadAsync();
+    }
+
+    private async Task CreateAndSelectGroup()
+    {
+        if (string.IsNullOrWhiteSpace(_newGroupName)) return;
+        _setupSaving = true;
+        var result = await HouseHoldService.CreateAsync(new CreateHouseHoldRequest(_newGroupName));
+        _setupSaving = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error!.Message, Severity.Error);
+            return;
+        }
+
+        Snackbar.Add("Grupo criado!", Severity.Success);
+        // Recarrega e auto-seleciona
+        await LoadGroupsForSetupAsync();
     }
 
     private async Task OnMonthChanged(int m) { _month = m; await LoadAsync(); }
