@@ -1,6 +1,7 @@
 @page "/cartoes-credito"
 @inject CreditCardService CreditCardService
 @inject BankAccountService BankAccountService
+@inject CategoryService CategoryService
 @inject AppState AppState
 @inject ISnackbar Snackbar
 
@@ -89,13 +90,42 @@ else
         <MudNumericField @bind-Value="_purchaseAmount" Label="Valor Total" Format="F2" Culture="_ptBr"
                          Adornment="Adornment.Start" AdornmentText="R$" Class="mb-3" />
         <MudDatePicker @bind-Date="_purchaseDate" Label="Data" Editable="true" DateFormat="dd/MM/yyyy" Class="mb-3" />
-        <MudNumericField @bind-Value="_purchaseInstallments" Label="Parcelas" Min="1" Max="48" />
+        <MudNumericField @bind-Value="_purchaseInstallments" Label="Parcelas" Min="1" Max="48" Class="mb-3" />
+        <MudSelect T="Guid?" @bind-Value="_purchaseCategoryId" Label="Categoria (opcional)" Clearable="true">
+            <MudSelectItem T="Guid?" Value="@((Guid?)null)">— Sem categoria —</MudSelectItem>
+            @foreach (var cat in _expenseCategories)
+            {
+                <MudSelectItem T="Guid?" Value="@((Guid?)cat.Id)">@cat.Name</MudSelectItem>
+            }
+        </MudSelect>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@(() => _showPurchase = false)">Cancelar</MudButton>
         <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SavePurchase" Disabled="_saving">
             @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" /> }
             Registrar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* Dialog: Editar Compra *@
+<MudDialog @bind-Visible="_showEditPurchase">
+    <TitleContent>Editar Compra</TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_editPurchaseDescription" Label="Descrição" Class="mb-3" />
+        <MudSelect T="Guid?" @bind-Value="_editPurchaseCategoryId" Label="Categoria (opcional)" Clearable="true">
+            <MudSelectItem T="Guid?" Value="@((Guid?)null)">— Sem categoria —</MudSelectItem>
+            @foreach (var cat in _expenseCategories)
+            {
+                <MudSelectItem T="Guid?" Value="@((Guid?)cat.Id)">@cat.Name</MudSelectItem>
+            }
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _showEditPurchase = false)">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveEditPurchase" Disabled="_saving">
+            @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" /> }
+            Salvar
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -153,8 +183,19 @@ else
                             </MudChip>
                         </MudTd>
                         <MudTd>
-                            <MudIconButton Icon="@Icons.Material.Rounded.Delete" Size="Size.Small" Color="Color.Error"
-                                           OnClick="@(() => DeletePurchase(context.PurchaseId))" />
+                            <div class="d-flex">
+                                @if (!context.IsPaid)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Rounded.CheckCircle" Size="Size.Small" Color="Color.Success"
+                                                   Title="Marcar como pago"
+                                                   OnClick="@(() => MarkInstallmentAsPaid(context.PurchaseId, context.InstallmentId))" />
+                                }
+                                <MudIconButton Icon="@Icons.Material.Rounded.Edit" Size="Size.Small"
+                                               Title="Editar compra"
+                                               OnClick="@(() => OpenEditPurchaseDialog(context))" />
+                                <MudIconButton Icon="@Icons.Material.Rounded.Delete" Size="Size.Small" Color="Color.Error"
+                                               OnClick="@(() => DeletePurchase(context.PurchaseId))" />
+                            </div>
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -186,7 +227,8 @@ else
 @code {
     private List<CreditCardResponse> _cards = [];
     private List<BankAccountResponse> _accounts = [];
-    private bool _loading, _saving, _showForm, _showPurchase, _showInvoice, _loadingInvoice;
+    private List<CategoryResponse> _expenseCategories = [];
+    private bool _loading, _saving, _showForm, _showPurchase, _showEditPurchase, _showInvoice, _loadingInvoice;
     private CreditCardResponse? _editing, _selectedCard;
     private string _formName = string.Empty;
     private decimal _formLimit;
@@ -195,6 +237,10 @@ else
     private decimal _purchaseAmount;
     private DateTime? _purchaseDate = DateTime.Today;
     private int _purchaseInstallments = 1;
+    private Guid? _purchaseCategoryId;
+    private Guid _editingPurchaseId;
+    private string _editPurchaseDescription = string.Empty;
+    private Guid? _editPurchaseCategoryId;
     private int _invoiceMonth = DateTime.Today.Month;
     private int _invoiceYear = DateTime.Today.Year;
     private CreditCardInvoiceResponse? _invoice;
@@ -204,7 +250,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        await Task.WhenAll(LoadAsync(), LoadAccountsAsync());
+        await Task.WhenAll(LoadAsync(), LoadAccountsAsync(), LoadCategoriesAsync());
     }
 
     private async Task LoadAsync()
@@ -220,6 +266,16 @@ else
     {
         var r = await BankAccountService.GetByHouseHoldAsync(AppState.HouseHoldId!.Value);
         if (r.IsSuccess) { _accounts = r.Value!; if (_accounts.Count > 0) _payBankAccountId = _accounts[0].Id; }
+    }
+
+    private async Task LoadCategoriesAsync()
+    {
+        var r = await CategoryService.GetByHouseHoldAsync(AppState.HouseHoldId!.Value);
+        if (r.IsSuccess)
+            _expenseCategories = r.Value!
+                .Where(c => c.Type == CategoryType.Expense)
+                .OrderBy(c => c.Name)
+                .ToList();
     }
 
     private void OpenCreateDialog() { _editing = null; _formName = string.Empty; _formLimit = 0; _formClosingDay = 5; _formDueDay = 12; _showForm = true; }
@@ -246,15 +302,49 @@ else
         else Snackbar.Add(r.Error!.Message, Severity.Error);
     }
 
-    private void OpenPurchaseDialog(CreditCardResponse c) { _selectedCard = c; _purchaseDescription = string.Empty; _purchaseAmount = 0; _purchaseDate = DateTime.Today; _purchaseInstallments = 1; _showPurchase = true; }
+    private void OpenPurchaseDialog(CreditCardResponse c)
+    {
+        _selectedCard = c;
+        _purchaseDescription = string.Empty;
+        _purchaseAmount = 0;
+        _purchaseDate = DateTime.Today;
+        _purchaseInstallments = 1;
+        _purchaseCategoryId = null;
+        _showPurchase = true;
+    }
 
     private async Task SavePurchase()
     {
         if (_purchaseAmount <= 0 || _purchaseDate is null) return;
         _saving = true;
-        var r = await CreditCardService.AddPurchaseAsync(new AddCreditCardPurchaseCommand(_selectedCard!.Id, _purchaseDescription, _purchaseAmount, _purchaseDate.Value, _purchaseInstallments));
+        var r = await CreditCardService.AddPurchaseAsync(new AddCreditCardPurchaseCommand(
+            _selectedCard!.Id,
+            _purchaseDescription,
+            _purchaseAmount,
+            _purchaseDate.Value,
+            _purchaseInstallments,
+            _purchaseCategoryId));
         _saving = false;
         if (r.IsSuccess) { Snackbar.Add("Compra registrada!", Severity.Success); _showPurchase = false; await LoadAsync(); }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private void OpenEditPurchaseDialog(InvoiceItemResponse item)
+    {
+        _editingPurchaseId = item.PurchaseId;
+        _editPurchaseDescription = item.Description ?? string.Empty;
+        _editPurchaseCategoryId = null;
+        _showEditPurchase = true;
+    }
+
+    private async Task SaveEditPurchase()
+    {
+        _saving = true;
+        var r = await CreditCardService.UpdatePurchaseAsync(
+            _editingPurchaseId,
+            new UpdateCreditCardPurchaseRequest(_editPurchaseDescription, _editPurchaseCategoryId));
+        _saving = false;
+        if (r.IsSuccess) { Snackbar.Add("Compra atualizada!", Severity.Success); _showEditPurchase = false; await LoadInvoice(); }
         else Snackbar.Add(r.Error!.Message, Severity.Error);
     }
 
@@ -284,6 +374,13 @@ else
     {
         var r = await CreditCardService.DeletePurchaseAsync(purchaseId);
         if (r.IsSuccess) { Snackbar.Add("Compra estornada.", Severity.Success); await LoadInvoice(); }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private async Task MarkInstallmentAsPaid(Guid purchaseId, Guid installmentId)
+    {
+        var r = await CreditCardService.MarkInstallmentAsPaidAsync(purchaseId, installmentId);
+        if (r.IsSuccess) { Snackbar.Add("Parcela marcada como paga!", Severity.Success); await LoadInvoice(); }
         else Snackbar.Add(r.Error!.Message, Severity.Error);
     }
 

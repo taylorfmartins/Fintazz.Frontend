@@ -1,6 +1,8 @@
 @page "/cadastro"
 @attribute [AllowAnonymous]
 @inject AuthService AuthService
+@inject FintazzAuthStateProvider AuthStateProvider
+@inject TokenStorageService TokenStorage
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
@@ -47,6 +49,7 @@
                       Adornment="Adornment.End"
                       AdornmentIcon="@_passwordIcon"
                       OnAdornmentClick="TogglePassword"
+                      @onkeydown="OnKeyDown"
                       Class="mb-4" />
 
         <MudButton Variant="Variant.Filled"
@@ -96,6 +99,11 @@
         }
     }
 
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await DoRegister();
+    }
+
     private string? ValidateBirthDate(string value)
     {
         if (!DateTime.TryParseExact(value, "dd/MM/yyyy",
@@ -122,21 +130,34 @@
         _loading = true;
         var request = new RegisterRequest(
             _fullName,
-            _nickname,  // serializa como nickName
+            _nickname,
             _email,
             DateOnly.FromDateTime(birthDate),
             _password);
 
         var result = await AuthService.RegisterAsync(request);
-        _loading = false;
 
         if (!result.IsSuccess)
         {
+            _loading = false;
             Snackbar.Add(result.Error!.Message, Severity.Error);
             return;
         }
 
-        Snackbar.Add("Conta criada com sucesso! Faça login.", Severity.Success);
-        Navigation.NavigateTo("/login");
+        // Auto-login após registro
+        var loginResult = await AuthService.LoginAsync(new LoginRequest(_email, _password));
+        _loading = false;
+
+        if (!loginResult.IsSuccess)
+        {
+            Snackbar.Add("Conta criada! Faça login para continuar.", Severity.Success);
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        await TokenStorage.SaveTokensAsync(loginResult.Value!.AccessToken, loginResult.Value.RefreshToken);
+        AuthStateProvider.NotifyUserLoggedIn(loginResult.Value.AccessToken);
+        Snackbar.Add("Bem-vindo ao Fintazz!", Severity.Success);
+        Navigation.NavigateTo("/dashboard");
     }
 }

@@ -14,7 +14,7 @@
 <div class="d-flex align-center justify-space-between mb-4">
     <MudText Typo="Typo.h5" Class="fw-bold">Categorias</MudText>
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add"
-               OnClick="OpenCreateDialog">Nova Categoria</MudButton>
+               OnClick="@(() => OpenCreateDialog(null))">Nova Categoria</MudButton>
 </div>
 
 @if (_loading)
@@ -23,38 +23,96 @@
 }
 else
 {
-    <MudTable Items="_categories" Hover="true" Elevation="2" Dense="true">
-        <HeaderContent>
-            <MudTh>Nome</MudTh>
-            <MudTh>Tipo</MudTh>
-            <MudTh Style="width:100px"></MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd>@context.Name</MudTd>
-            <MudTd>
-                <MudChip T="string" Size="Size.Small"
-                         Color="@(context.Type == CategoryType.Income ? Color.Success : Color.Error)">
-                    @(context.Type == CategoryType.Income ? "Receita" : "Despesa")
-                </MudChip>
-            </MudTd>
-            <MudTd>
-                <MudIconButton Icon="@Icons.Material.Rounded.Edit" Size="Size.Small"
-                               OnClick="@(() => OpenEditDialog(context))" />
-                <MudIconButton Icon="@Icons.Material.Rounded.Delete" Size="Size.Small" Color="Color.Error"
-                               OnClick="@(() => Delete(context.Id))" />
-            </MudTd>
-        </RowTemplate>
-        <NoRecordsContent>
-            <MudText Align="Align.Center" Class="pa-4" Color="Color.Secondary">Nenhuma categoria cadastrada.</MudText>
-        </NoRecordsContent>
-    </MudTable>
+    @foreach (var type in new[] { CategoryType.Expense, CategoryType.Income })
+    {
+        var parents = _categories
+            .Where(c => c.Type == type && c.ParentCategoryId is null)
+            .OrderBy(c => c.IsSystem ? 0 : 1).ThenBy(c => c.Name)
+            .ToList();
+
+        if (parents.Count == 0) continue;
+
+        <MudText Typo="Typo.subtitle1" Class="mt-4 mb-2 fw-bold">
+            @(type == CategoryType.Expense ? "Despesas" : "Receitas")
+        </MudText>
+
+        <MudTable Items="parents" Hover="true" Elevation="2" Dense="true" Class="mb-4">
+            <HeaderContent>
+                <MudTh>Nome</MudTh>
+                <MudTh Style="width:80px"></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    <div class="d-flex align-center gap-2">
+                        @if (context.IsSystem)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">Sistema</MudChip>
+                        }
+                        <span>@context.Name</span>
+                    </div>
+
+                    @{
+                        var subs = _categories
+                            .Where(c => c.ParentCategoryId == context.Id)
+                            .OrderBy(c => c.Name)
+                            .ToList();
+                    }
+                    @if (subs.Count > 0)
+                    {
+                        <div class="ml-4 mt-1">
+                            @foreach (var sub in subs)
+                            {
+                                <div class="d-flex align-center gap-2 py-1">
+                                    <MudIcon Icon="@Icons.Material.Rounded.SubdirectoryArrowRight" Size="Size.Small" Color="Color.Secondary" />
+                                    <span class="mud-text-secondary">@sub.Name</span>
+                                    @if (!sub.IsSystem)
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Rounded.Edit" Size="Size.Small"
+                                                       OnClick="@(() => OpenEditDialog(sub))" />
+                                        <MudIconButton Icon="@Icons.Material.Rounded.Delete" Size="Size.Small" Color="Color.Error"
+                                                       OnClick="@(() => Delete(sub.Id))" />
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </MudTd>
+                <MudTd>
+                    <div class="d-flex">
+                        <MudIconButton Icon="@Icons.Material.Rounded.AccountTree" Size="Size.Small" Color="Color.Secondary"
+                                       Title="Nova subcategoria"
+                                       OnClick="@(() => OpenCreateDialog(context))" />
+                        @if (!context.IsSystem)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Rounded.Edit" Size="Size.Small"
+                                           OnClick="@(() => OpenEditDialog(context))" />
+                            <MudIconButton Icon="@Icons.Material.Rounded.Delete" Size="Size.Small" Color="Color.Error"
+                                           OnClick="@(() => Delete(context.Id))" />
+                        }
+                    </div>
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Align="Align.Center" Class="pa-4" Color="Color.Secondary">Nenhuma categoria cadastrada.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    }
 }
 
 <MudDialog @bind-Visible="_showForm">
-    <TitleContent>@(_editing is null ? "Nova Categoria" : "Editar Categoria")</TitleContent>
+    <TitleContent>
+        @if (_editing is null)
+        {
+            @(_parentForNew is null ? "Nova Categoria" : $"Nova Subcategoria de \"{_parentForNew.Name}\"")
+        }
+        else
+        {
+            @("Editar Categoria")
+        }
+    </TitleContent>
     <DialogContent>
         <MudTextField @bind-Value="_formName" Label="Nome" Required="true" Class="mb-3" />
-        @if (_editing is null)
+        @if (_editing is null && _parentForNew is null)
         {
             <MudSelect T="CategoryType" @bind-Value="_formType" Label="Tipo">
                 <MudSelectItem Value="CategoryType.Income">Receita</MudSelectItem>
@@ -77,6 +135,7 @@ else
     private string _formName = string.Empty;
     private CategoryType _formType = CategoryType.Expense;
     private CategoryResponse? _editing;
+    private CategoryResponse? _parentForNew;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -89,9 +148,22 @@ else
         else Snackbar.Add(r.Error!.Message, Severity.Error);
     }
 
-    private void OpenCreateDialog() { _editing = null; _formName = string.Empty; _formType = CategoryType.Expense; _showForm = true; }
+    private void OpenCreateDialog(CategoryResponse? parent)
+    {
+        _editing = null;
+        _parentForNew = parent;
+        _formName = string.Empty;
+        _formType = parent?.Type ?? CategoryType.Expense;
+        _showForm = true;
+    }
 
-    private void OpenEditDialog(CategoryResponse c) { _editing = c; _formName = c.Name ?? string.Empty; _showForm = true; }
+    private void OpenEditDialog(CategoryResponse c)
+    {
+        _editing = c;
+        _parentForNew = null;
+        _formName = c.Name ?? string.Empty;
+        _showForm = true;
+    }
 
     private async Task Save()
     {
@@ -99,7 +171,11 @@ else
         _saving = true;
         Result r;
         if (_editing is null)
-            r = await CategoryService.CreateAsync(new CreateCategoryRequest(AppState.HouseHoldId!.Value, _formName, _formType));
+            r = await CategoryService.CreateAsync(new CreateCategoryRequest(
+                AppState.HouseHoldId!.Value,
+                _formName,
+                _parentForNew?.Type ?? _formType,
+                _parentForNew?.Id));
         else
             r = await CategoryService.UpdateAsync(_editing.Id, new UpdateCategoryRequest(_formName));
         _saving = false;

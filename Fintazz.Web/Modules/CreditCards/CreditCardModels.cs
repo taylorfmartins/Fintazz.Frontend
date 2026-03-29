@@ -26,7 +26,10 @@ public record AddCreditCardPurchaseCommand(
     string? Description,
     decimal TotalAmount,
     DateTime PurchaseDate,
-    int TotalInstallments);
+    int TotalInstallments,
+    Guid? CategoryId = null);
+
+public record UpdateCreditCardPurchaseRequest(string? Description, Guid? CategoryId);
 
 public record CreditCardInvoiceResponse(
     decimal TotalAmount,
@@ -36,6 +39,7 @@ public record CreditCardInvoiceResponse(
 
 public record InvoiceItemResponse(
     Guid PurchaseId,
+    Guid InstallmentId,
     string? Description,
     DateTime PurchaseDate,
     decimal TotalPurchaseAmount,

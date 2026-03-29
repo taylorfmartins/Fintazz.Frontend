@@ -175,15 +175,38 @@ if (!result.IsSuccess)
 Snackbar.Add("Conta criada com sucesso!", Severity.Success);
 ```
 
-## Módulos a Implementar
+## Módulos Implementados
 
-Implemente seguindo a documentação em `/docs` antes de começar cada módulo:
+- **Autenticação** ✅ — login, cadastro com auto-login, refresh token automático
+- **Dashboard** ✅ — balanço mensal consolidado
+- **Grupos Familiares** ✅ — criação, convites, gestão de membros
+- **Contas Bancárias** ✅ — CRUD completo
+- **Cartões de Crédito** ✅ — CRUD completo, compras com categoria, edição de compra, marcar parcela como paga, fatura mensal e pagamento
+- **Transações** ✅ — lançamento de receitas e despesas, extrato paginado, marcar como paga, excluir
+- **Transações Recorrentes** ✅ — cadastro, aprovação manual, reativação, gestão
+- **Categorias** ✅ — CRUD completo com subcategorias e categorias de sistema
 
-- **Autenticação** — login, cadastro e refresh token automático
-- **Dashboard** — balanço mensal consolidado
-- **Grupos Familiares** — criação, convites e gestão de membros
-- **Contas Bancárias** — CRUD completo e pagamento de fatura
-- **Cartões de Crédito** — CRUD completo, compras e fatura mensal
-- **Transações** — lançamento de receitas e despesas, extrato
-- **Transações Recorrentes** — cadastro, aprovação manual e gestão
-- **Categorias** — CRUD completo
+## Melhorias Pendentes
+
+- **Grupos Familiares**
+	- Ao enviar e-mail com o convite do grupo para o usuário, ao clicar em entrar no grupo no link do e-mail, irá trazer o usuário para o sistema: precisa fazer cadastro se não tiver conta ou entrar no grupo automaticamente se já autenticado.
+
+## Melhorias Implementadas
+
+- **Tela de Registros** ✅
+	- Ao apertar Enter no campo senha, o formulário de cadastro é enviado
+	- Após registrar, o login é feito automaticamente e o usuário é redirecionado para o dashboard
+
+- **Grupos Familiares** ✅
+	- Convite não aceita o e-mail do dono do grupo — erro tratado pelo backend (`HouseHold.CannotInviteYourself`)
+	- Verificação de membro já no grupo antes de enviar convite — erro tratado pelo backend (`HouseHold.AlreadyMember`)
+
+- **Compras Cartão de Crédito** ✅
+	- Seleção de categoria de despesas ao registrar compra
+	- Edição de compra existente — descrição e categoria
+	- Marcar parcela individual como paga diretamente na fatura
+
+- **Categorias** ✅
+	- Subcategorias: registradas dentro de uma categoria pai; botão "Nova Subcategoria" em cada linha
+	- Categorias de sistema exibem badge "Sistema" e não podem ser editadas ou excluídas
+	- Categorias agrupadas por tipo (Despesas / Receitas) com subcategorias indentadas

@@ -56,9 +56,25 @@ public class CreditCardService(HttpClient http)
         return Result.Success();
     }
 
+    public async Task<Result> UpdatePurchaseAsync(Guid purchaseId, UpdateCreditCardPurchaseRequest request)
+    {
+        var response = await http.PutAsJsonAsync($"api/credit-cards/purchases/{purchaseId}", request);
+        if (!response.IsSuccessStatusCode)
+            return Result.Failure(await ReadError(response));
+        return Result.Success();
+    }
+
     public async Task<Result> DeletePurchaseAsync(Guid purchaseId)
     {
         var response = await http.DeleteAsync($"api/credit-cards/purchases/{purchaseId}");
+        if (!response.IsSuccessStatusCode)
+            return Result.Failure(await ReadError(response));
+        return Result.Success();
+    }
+
+    public async Task<Result> MarkInstallmentAsPaidAsync(Guid purchaseId, Guid installmentId)
+    {
+        var response = await http.PostAsync($"api/credit-cards/purchases/{purchaseId}/installments/{installmentId}/pay", null);
         if (!response.IsSuccessStatusCode)
             return Result.Failure(await ReadError(response));
         return Result.Success();
