@@ -1,0 +1,299 @@
+@page "/cartoes-credito"
+@inject CreditCardService CreditCardService
+@inject BankAccountService BankAccountService
+@inject AppState AppState
+@inject ISnackbar Snackbar
+
+<PageTitle>Cartões de Crédito — Fintazz</PageTitle>
+
+@if (!AppState.HasHouseHold)
+{
+    <MudAlert Severity="Severity.Info">Selecione um grupo familiar primeiro. <MudLink Href="/grupos">Ir para grupos</MudLink></MudAlert>
+    return;
+}
+
+<div class="d-flex align-center justify-space-between mb-4">
+    <MudText Typo="Typo.h5" Class="fw-bold">Cartões de Crédito</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add"
+               OnClick="OpenCreateDialog">Novo Cartão</MudButton>
+</div>
+
+@if (_loading)
+{
+    <div class="d-flex justify-center pa-8"><MudProgressCircular Indeterminate="true" /></div>
+}
+else if (_cards.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">Nenhum cartão cadastrado.</MudAlert>
+}
+else
+{
+    <MudGrid>
+        @foreach (var c in _cards)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <div class="d-flex align-center gap-3 mb-3">
+                            <MudIcon Icon="@Icons.Material.Rounded.CreditCard" Color="Color.Primary" Size="Size.Large" />
+                            <MudText Typo="Typo.h6">@c.Name</MudText>
+                        </div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Limite disponível</MudText>
+                        <MudText Typo="Typo.h5" Color="Color.Success">@c.AvailableLimit.ToString("C2", _ptBr)</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">de @c.TotalLimit.ToString("C2", _ptBr)</MudText>
+                        <MudProgressLinear Value="@((double)(c.TotalLimit > 0 ? (c.TotalLimit - c.AvailableLimit) / c.TotalLimit * 100 : 0))"
+                                           Color="Color.Warning" Class="mt-1" />
+                        <div class="d-flex gap-4 mt-2">
+                            <div><MudText Typo="Typo.caption" Color="Color.Secondary">Fecha dia</MudText><MudText>@c.ClosingDay</MudText></div>
+                            <div><MudText Typo="Typo.caption" Color="Color.Secondary">Vence dia</MudText><MudText>@c.DueDay</MudText></div>
+                        </div>
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudButton Size="Size.Small" OnClick="@(() => OpenInvoiceDialog(c))">Fatura</MudButton>
+                        <MudButton Size="Size.Small" OnClick="@(() => OpenPurchaseDialog(c))">+ Compra</MudButton>
+                        <MudIconButton Icon="@Icons.Material.Rounded.Edit" Size="Size.Small"
+                                       OnClick="@(() => OpenEditDialog(c))" />
+                        <MudIconButton Icon="@Icons.Material.Rounded.Delete" Size="Size.Small" Color="Color.Error"
+                                       OnClick="@(() => Delete(c.Id))" />
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@* Dialog: Criar/Editar Cartão *@
+<MudDialog @bind-Visible="_showForm">
+    <TitleContent>@(_editing is null ? "Novo Cartão" : "Editar Cartão")</TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_formName" Label="Nome (ex: Nubank, Inter)" Required="true" Class="mb-3" />
+        <MudNumericField @bind-Value="_formLimit" Label="Limite Total" Format="F2" Culture="_ptBr"
+                         Adornment="Adornment.Start" AdornmentText="R$" Class="mb-3" />
+        <MudNumericField @bind-Value="_formClosingDay" Label="Dia de Fechamento" Min="1" Max="31" Class="mb-3" />
+        <MudNumericField @bind-Value="_formDueDay" Label="Dia de Vencimento" Min="1" Max="31" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _showForm = false)">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_saving">
+            @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" /> }
+            Salvar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* Dialog: Nova Compra *@
+<MudDialog @bind-Visible="_showPurchase">
+    <TitleContent>Nova Compra — @_selectedCard?.Name</TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_purchaseDescription" Label="Descrição" Class="mb-3" />
+        <MudNumericField @bind-Value="_purchaseAmount" Label="Valor Total" Format="F2" Culture="_ptBr"
+                         Adornment="Adornment.Start" AdornmentText="R$" Class="mb-3" />
+        <MudDatePicker @bind-Date="_purchaseDate" Label="Data" Editable="true" DateFormat="dd/MM/yyyy" Class="mb-3" />
+        <MudNumericField @bind-Value="_purchaseInstallments" Label="Parcelas" Min="1" Max="48" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _showPurchase = false)">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SavePurchase" Disabled="_saving">
+            @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" /> }
+            Registrar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* Dialog: Fatura *@
+<MudDialog @bind-Visible="_showInvoice" Options="@(new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true })">
+    <TitleContent>
+        Fatura — @_selectedCard?.Name
+        <div class="d-flex gap-2 mt-1">
+            <MudSelect T="int" Value="_invoiceMonth" ValueChanged="OnInvoiceMonthChanged" Dense="true" Style="min-width:100px">
+                @for (int m = 1; m <= 12; m++)
+                {
+                    var label = new DateTime(2000, m, 1).ToString("MMM", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"));
+                    var val = m;
+                    <MudSelectItem Value="@val">@label</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="int" Value="_invoiceYear" ValueChanged="OnInvoiceYearChanged" Dense="true" Style="min-width:90px">
+                @for (int y = DateTime.Today.Year - 1; y <= DateTime.Today.Year + 1; y++)
+                {
+                    var val = y;
+                    <MudSelectItem Value="@val">@val</MudSelectItem>
+                }
+            </MudSelect>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        @if (_loadingInvoice)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (_invoice is not null)
+        {
+            <MudText Typo="Typo.h6" Class="mb-3">
+                Total: <strong>@_invoice.TotalAmount.ToString("C2", _ptBr)</strong>
+            </MudText>
+            @if (_invoice.Items?.Count > 0)
+            {
+                <MudTable Items="_invoice.Items" Dense="true" Hover="true">
+                    <HeaderContent>
+                        <MudTh>Descrição</MudTh>
+                        <MudTh>Parcela</MudTh>
+                        <MudTh>Valor</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@(context.Description ?? "—")</MudTd>
+                        <MudTd>@context.CurrentInstallment/@context.TotalInstallments</MudTd>
+                        <MudTd>@context.InstallmentAmount.ToString("C2", _ptBr)</MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small"
+                                     Color="@(context.IsPaid ? Color.Success : Color.Warning)">
+                                @(context.IsPaid ? "Pago" : "Pendente")
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@Icons.Material.Rounded.Delete" Size="Size.Small" Color="Color.Error"
+                                           OnClick="@(() => DeletePurchase(context.PurchaseId))" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+                <MudDivider Class="my-3" />
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Pagar Fatura</MudText>
+                <div class="d-flex gap-2 align-end">
+                    <MudSelect T="Guid" @bind-Value="_payBankAccountId" Label="Conta" Style="min-width:180px">
+                        @foreach (var a in _accounts)
+                        {
+                            <MudSelectItem Value="@a.Id">@a.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="PayInvoice" Disabled="_saving">
+                        Pagar
+                    </MudButton>
+                </div>
+            }
+            else
+            {
+                <MudText Color="Color.Secondary">Fatura vazia para o período.</MudText>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _showInvoice = false)">Fechar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<CreditCardResponse> _cards = [];
+    private List<BankAccountResponse> _accounts = [];
+    private bool _loading, _saving, _showForm, _showPurchase, _showInvoice, _loadingInvoice;
+    private CreditCardResponse? _editing, _selectedCard;
+    private string _formName = string.Empty;
+    private decimal _formLimit;
+    private int _formClosingDay = 5, _formDueDay = 12;
+    private string _purchaseDescription = string.Empty;
+    private decimal _purchaseAmount;
+    private DateTime? _purchaseDate = DateTime.Today;
+    private int _purchaseInstallments = 1;
+    private int _invoiceMonth = DateTime.Today.Month;
+    private int _invoiceYear = DateTime.Today.Year;
+    private CreditCardInvoiceResponse? _invoice;
+    private Guid _payBankAccountId;
+    private readonly System.Globalization.CultureInfo _ptBr =
+        System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadAsync(), LoadAccountsAsync());
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var r = await CreditCardService.GetByHouseHoldAsync(AppState.HouseHoldId!.Value);
+        _loading = false;
+        if (r.IsSuccess) _cards = r.Value!;
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private async Task LoadAccountsAsync()
+    {
+        var r = await BankAccountService.GetByHouseHoldAsync(AppState.HouseHoldId!.Value);
+        if (r.IsSuccess) { _accounts = r.Value!; if (_accounts.Count > 0) _payBankAccountId = _accounts[0].Id; }
+    }
+
+    private void OpenCreateDialog() { _editing = null; _formName = string.Empty; _formLimit = 0; _formClosingDay = 5; _formDueDay = 12; _showForm = true; }
+
+    private void OpenEditDialog(CreditCardResponse c) { _editing = c; _formName = c.Name ?? string.Empty; _formLimit = c.TotalLimit; _formClosingDay = c.ClosingDay; _formDueDay = c.DueDay; _showForm = true; }
+
+    private async Task Save()
+    {
+        _saving = true;
+        Result r;
+        if (_editing is null)
+            r = await CreditCardService.CreateAsync(new CreateCreditCardCommand(AppState.HouseHoldId!.Value, _formName, _formLimit, _formClosingDay, _formDueDay));
+        else
+            r = await CreditCardService.UpdateAsync(_editing.Id, new UpdateCreditCardRequest(_formName, _formLimit, _formClosingDay, _formDueDay));
+        _saving = false;
+        if (r.IsSuccess) { Snackbar.Add("Cartão salvo!", Severity.Success); _showForm = false; await LoadAsync(); }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private async Task Delete(Guid id)
+    {
+        var r = await CreditCardService.DeleteAsync(id);
+        if (r.IsSuccess) { Snackbar.Add("Cartão excluído.", Severity.Success); await LoadAsync(); }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private void OpenPurchaseDialog(CreditCardResponse c) { _selectedCard = c; _purchaseDescription = string.Empty; _purchaseAmount = 0; _purchaseDate = DateTime.Today; _purchaseInstallments = 1; _showPurchase = true; }
+
+    private async Task SavePurchase()
+    {
+        if (_purchaseAmount <= 0 || _purchaseDate is null) return;
+        _saving = true;
+        var r = await CreditCardService.AddPurchaseAsync(new AddCreditCardPurchaseCommand(_selectedCard!.Id, _purchaseDescription, _purchaseAmount, _purchaseDate.Value, _purchaseInstallments));
+        _saving = false;
+        if (r.IsSuccess) { Snackbar.Add("Compra registrada!", Severity.Success); _showPurchase = false; await LoadAsync(); }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private async Task OpenInvoiceDialog(CreditCardResponse c)
+    {
+        _selectedCard = c;
+        _showInvoice = true;
+        await LoadInvoice(_invoiceMonth);
+    }
+
+    private async Task OnInvoiceMonthChanged(int m) { _invoiceMonth = m; await LoadInvoice(); }
+    private async Task OnInvoiceYearChanged(int y) { _invoiceYear = y; await LoadInvoice(); }
+
+    private async Task LoadInvoice(int _) => await LoadInvoice();
+
+    private async Task LoadInvoice()
+    {
+        if (_selectedCard is null) return;
+        _loadingInvoice = true;
+        var r = await CreditCardService.GetInvoiceAsync(_selectedCard.Id, _invoiceMonth, _invoiceYear);
+        _loadingInvoice = false;
+        if (r.IsSuccess) _invoice = r.Value;
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private async Task DeletePurchase(Guid purchaseId)
+    {
+        var r = await CreditCardService.DeletePurchaseAsync(purchaseId);
+        if (r.IsSuccess) { Snackbar.Add("Compra estornada.", Severity.Success); await LoadInvoice(); }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private async Task PayInvoice()
+    {
+        if (_payBankAccountId == Guid.Empty) return;
+        _saving = true;
+        var r = await CreditCardService.PayInvoiceAsync(_selectedCard!.Id, new PayInvoiceRequest(_payBankAccountId, _invoiceMonth, _invoiceYear));
+        _saving = false;
+        if (r.IsSuccess) { Snackbar.Add("Fatura paga!", Severity.Success); await LoadInvoice(); }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+}

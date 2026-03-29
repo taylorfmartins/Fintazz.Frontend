@@ -1,0 +1,52 @@
+@page "/convite/{Token}"
+@attribute [AllowAnonymous]
+@inject HouseHoldService HouseHoldService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Aceitar Convite — Fintazz</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex justify-center align-center" Style="min-height:100vh">
+    <MudPaper Class="pa-6" Elevation="3" Style="width:100%;max-width:420px;text-align:center">
+        <MudIcon Icon="@Icons.Material.Rounded.GroupAdd" Color="Color.Primary" Size="Size.Large" Class="mb-3" />
+        <MudText Typo="Typo.h6" Class="mb-2">Convite para Grupo Familiar</MudText>
+        @if (_loading)
+        {
+            <MudProgressCircular Indeterminate="true" Class="my-4" />
+            <MudText Color="Color.Secondary">Processando convite...</MudText>
+        }
+        else if (_done)
+        {
+            <MudAlert Severity="Severity.Success">Você entrou no grupo com sucesso!</MudAlert>
+            <MudButton Class="mt-4" Href="/" Variant="Variant.Filled" Color="Color.Primary">Ir para o app</MudButton>
+        }
+        else if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error">@_error</MudAlert>
+            <MudButton Class="mt-4" Href="/" Variant="Variant.Outlined">Voltar</MudButton>
+        }
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [Parameter] public string Token { get; set; } = default!;
+
+    private bool _loading = true, _done;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthState.GetAuthenticationStateAsync();
+        if (!auth.User.Identity?.IsAuthenticated ?? true)
+        {
+            Navigation.NavigateTo($"/login?returnUrl=/convite/{Token}");
+            return;
+        }
+
+        var result = await HouseHoldService.AcceptInviteAsync(Token);
+        _loading = false;
+        if (result.IsSuccess) _done = true;
+        else _error = result.Error!.Message;
+    }
+}

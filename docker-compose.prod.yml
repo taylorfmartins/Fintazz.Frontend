@@ -1,0 +1,8 @@
+services:
+  frontend:
+    image: ghcr.io/taylorfmartins/fintazz-frontend:latest
+    container_name: fintazz-frontend
+    ports:
+      - "3000:80"
+    env_file: .env
+    restart: unless-stopped

@@ -1,0 +1,221 @@
+@page "/grupos"
+@inject HouseHoldService HouseHoldService
+@inject AppState AppState
+@inject ISnackbar Snackbar
+@inject IDialogService Dialog
+@inject IJSRuntime JS
+
+<PageTitle>Grupos Familiares — Fintazz</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4">
+    <MudText Typo="Typo.h5" Class="fw-bold">Grupos Familiares</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add"
+               OnClick="OpenCreateDialog">Novo Grupo</MudButton>
+</div>
+
+@if (_loading)
+{
+    <div class="d-flex justify-center pa-8"><MudProgressCircular Indeterminate="true" /></div>
+}
+else if (_groups.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">Você ainda não pertence a nenhum grupo. Crie um ou aguarde um convite.</MudAlert>
+}
+else
+{
+    <MudGrid>
+        @foreach (var g in _groups)
+        {
+            <MudItem xs="12" md="6" lg="4">
+                <MudCard Elevation="2" Class="@(AppState.HouseHoldId == g.Id ? "mud-border-primary" : "")">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <div class="d-flex align-center gap-2">
+                                <MudIcon Icon="@Icons.Material.Rounded.Groups" Color="Color.Primary" />
+                                <MudText Typo="Typo.h6">@g.Name</MudText>
+                            </div>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            @if (AppState.HouseHoldId == g.Id)
+                            {
+                                <MudChip T="string" Color="Color.Primary" Size="Size.Small">Ativo</MudChip>
+                            }
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardActions>
+                        <MudButton Color="Color.Primary" OnClick="@(() => SelectGroup(g))">Selecionar</MudButton>
+                        <MudButton Color="Color.Default" OnClick="@(() => OpenMembersDialog(g))">Membros</MudButton>
+                        <MudIconButton Icon="@Icons.Material.Rounded.Edit" OnClick="@(() => OpenEditDialog(g))" />
+                        <MudIconButton Icon="@Icons.Material.Rounded.Delete" Color="Color.Error"
+                                       OnClick="@(() => DeleteGroup(g))" />
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@* Dialog: Criar/Editar *@
+<MudDialog @bind-Visible="_showForm">
+    <TitleContent>@(_editingGroup is null ? "Novo Grupo" : "Editar Grupo")</TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_formName" Label="Nome do Grupo" Required="true"
+                      RequiredError="Nome é obrigatório" Class="mb-2" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _showForm = false)">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveGroup"
+                   Disabled="_saving">
+            @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" /> }
+            Salvar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* Dialog: Membros *@
+<MudDialog @bind-Visible="_showMembers" Options="@(new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true })">
+    <TitleContent>Membros — @_selectedGroup?.Name</TitleContent>
+    <DialogContent>
+        @if (_members is null)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else
+        {
+            <MudList T="HouseHoldMemberResponse" Dense="true">
+                @foreach (var m in _members)
+                {
+                    <MudListItem>
+                        <div class="d-flex align-center justify-space-between w-100">
+                            <div>
+                                <MudText>@m.FullName <MudChip T="string" Size="Size.Small">@m.NickName</MudChip></MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@m.Email</MudText>
+                            </div>
+                            <div class="d-flex align-center gap-1">
+                                @if (m.IsAdmin) { <MudChip T="string" Color="Color.Primary" Size="Size.Small">Admin</MudChip> }
+                                <MudIconButton Icon="@Icons.Material.Rounded.PersonRemove" Size="Size.Small"
+                                               Color="Color.Error" OnClick="@(() => RemoveMember(m.UserId))" />
+                            </div>
+                        </div>
+                    </MudListItem>
+                }
+            </MudList>
+            <MudDivider Class="my-3" />
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Convidar por e-mail</MudText>
+            <div class="d-flex gap-2">
+                <MudTextField @bind-Value="_inviteEmail" Label="E-mail" Class="flex-1" Dense="true" />
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SendInvite"
+                           Disabled="_saving">Convidar</MudButton>
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _showMembers = false)">Fechar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<HouseHoldResponse> _groups = [];
+    private bool _loading, _saving, _showForm, _showMembers;
+    private string _formName = string.Empty;
+    private string _inviteEmail = string.Empty;
+    private HouseHoldResponse? _editingGroup, _selectedGroup;
+    private List<HouseHoldMemberResponse>? _members;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var result = await HouseHoldService.GetAllAsync();
+        _loading = false;
+        if (result.IsSuccess) _groups = result.Value!;
+        else Snackbar.Add(result.Error!.Message, Severity.Error);
+    }
+
+    private async Task SelectGroup(HouseHoldResponse g)
+    {
+        AppState.SetHouseHold(g.Id, g.Name ?? string.Empty);
+        await JS.InvokeVoidAsync("localStorage.setItem", "fintazz_household_id", g.Id.ToString());
+        await JS.InvokeVoidAsync("localStorage.setItem", "fintazz_household_name", g.Name ?? string.Empty);
+        Snackbar.Add($"Grupo \"{g.Name}\" selecionado.", Severity.Success);
+    }
+
+    private void OpenCreateDialog()
+    {
+        _editingGroup = null;
+        _formName = string.Empty;
+        _showForm = true;
+    }
+
+    private void OpenEditDialog(HouseHoldResponse g)
+    {
+        _editingGroup = g;
+        _formName = g.Name ?? string.Empty;
+        _showForm = true;
+    }
+
+    private async Task SaveGroup()
+    {
+        if (string.IsNullOrWhiteSpace(_formName)) return;
+        _saving = true;
+        if (_editingGroup is null)
+        {
+            var r = await HouseHoldService.CreateAsync(new CreateHouseHoldRequest(_formName));
+            if (r.IsSuccess) Snackbar.Add("Grupo criado!", Severity.Success);
+            else Snackbar.Add(r.Error!.Message, Severity.Error);
+        }
+        else
+        {
+            var r = await HouseHoldService.UpdateAsync(_editingGroup.Id, new UpdateHouseHoldRequest(_formName));
+            if (r.IsSuccess) Snackbar.Add("Grupo atualizado!", Severity.Success);
+            else Snackbar.Add(r.Error!.Message, Severity.Error);
+        }
+        _saving = false;
+        _showForm = false;
+        await LoadAsync();
+    }
+
+    private async Task DeleteGroup(HouseHoldResponse g)
+    {
+        var result = await HouseHoldService.DeleteAsync(g.Id);
+        if (result.IsSuccess)
+        {
+            if (AppState.HouseHoldId == g.Id) AppState.Clear();
+            Snackbar.Add("Grupo excluído.", Severity.Success);
+            await LoadAsync();
+        }
+        else Snackbar.Add(result.Error!.Message, Severity.Error);
+    }
+
+    private async Task OpenMembersDialog(HouseHoldResponse g)
+    {
+        _selectedGroup = g;
+        _members = null;
+        _inviteEmail = string.Empty;
+        _showMembers = true;
+        var r = await HouseHoldService.GetMembersAsync(g.Id);
+        _members = r.IsSuccess ? r.Value : [];
+    }
+
+    private async Task RemoveMember(Guid userId)
+    {
+        var r = await HouseHoldService.RemoveMemberAsync(_selectedGroup!.Id, userId);
+        if (r.IsSuccess) await OpenMembersDialog(_selectedGroup!);
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private async Task SendInvite()
+    {
+        if (string.IsNullOrWhiteSpace(_inviteEmail)) return;
+        _saving = true;
+        var r = await HouseHoldService.SendInviteAsync(_selectedGroup!.Id, new SendInviteRequest(_inviteEmail));
+        _saving = false;
+        if (r.IsSuccess)
+        {
+            Snackbar.Add("Convite enviado!", Severity.Success);
+            _inviteEmail = string.Empty;
+        }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+}

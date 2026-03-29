@@ -1,0 +1,133 @@
+@page "/contas-bancarias"
+@inject BankAccountService BankAccountService
+@inject AppState AppState
+@inject ISnackbar Snackbar
+
+<PageTitle>Contas Bancárias — Fintazz</PageTitle>
+
+@if (!AppState.HasHouseHold)
+{
+    <MudAlert Severity="Severity.Info">Selecione um grupo familiar primeiro. <MudLink Href="/grupos">Ir para grupos</MudLink></MudAlert>
+    return;
+}
+
+<div class="d-flex align-center justify-space-between mb-4">
+    <MudText Typo="Typo.h5" Class="fw-bold">Contas Bancárias</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add"
+               OnClick="OpenCreateDialog">Nova Conta</MudButton>
+</div>
+
+@if (_loading)
+{
+    <div class="d-flex justify-center pa-8"><MudProgressCircular Indeterminate="true" /></div>
+}
+else if (_accounts.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">Nenhuma conta bancária cadastrada.</MudAlert>
+}
+else
+{
+    <MudGrid>
+        @foreach (var a in _accounts)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <div class="d-flex align-center gap-3 mb-2">
+                            <MudIcon Icon="@Icons.Material.Rounded.AccountBalance" Color="Color.Primary" Size="Size.Large" />
+                            <MudText Typo="Typo.h6">@a.Name</MudText>
+                        </div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Saldo Atual</MudText>
+                        <MudText Typo="Typo.h5" Color="@(a.CurrentBalance >= 0 ? Color.Success : Color.Error)">
+                            @a.CurrentBalance.ToString("C2", _ptBr)
+                        </MudText>
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudIconButton Icon="@Icons.Material.Rounded.Edit" OnClick="@(() => OpenEditDialog(a))" />
+                        <MudIconButton Icon="@Icons.Material.Rounded.Delete" Color="Color.Error"
+                                       OnClick="@(() => Delete(a.Id))" />
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+<MudDialog @bind-Visible="_showForm">
+    <TitleContent>@(_editing is null ? "Nova Conta" : "Editar Conta")</TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_formName" Label="Nome (ex: Nubank, Itaú)" Required="true" Class="mb-3" />
+        <MudNumericField @bind-Value="_formBalance" Label="Saldo Inicial" Format="F2"
+                         Culture="_ptBr" Adornment="Adornment.Start" AdornmentText="R$" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _showForm = false)">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_saving">
+            @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" /> }
+            Salvar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<BankAccountResponse> _accounts = [];
+    private bool _loading, _saving, _showForm;
+    private string _formName = string.Empty;
+    private decimal _formBalance;
+    private BankAccountResponse? _editing;
+    private readonly System.Globalization.CultureInfo _ptBr =
+        System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var r = await BankAccountService.GetByHouseHoldAsync(AppState.HouseHoldId!.Value);
+        _loading = false;
+        if (r.IsSuccess) _accounts = r.Value!;
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private void OpenCreateDialog()
+    {
+        _editing = null;
+        _formName = string.Empty;
+        _formBalance = 0;
+        _showForm = true;
+    }
+
+    private void OpenEditDialog(BankAccountResponse a)
+    {
+        _editing = a;
+        _formName = a.Name ?? string.Empty;
+        _formBalance = a.CurrentBalance;
+        _showForm = true;
+    }
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(_formName)) return;
+        _saving = true;
+        Result r;
+        if (_editing is null)
+            r = await BankAccountService.CreateAsync(new CreateBankAccountCommand(AppState.HouseHoldId!.Value, _formName, _formBalance));
+        else
+            r = await BankAccountService.UpdateAsync(_editing.Id, new UpdateBankAccountRequest(_formName, null, _formBalance));
+        _saving = false;
+        if (r.IsSuccess)
+        {
+            Snackbar.Add("Conta salva!", Severity.Success);
+            _showForm = false;
+            await LoadAsync();
+        }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private async Task Delete(Guid id)
+    {
+        var r = await BankAccountService.DeleteAsync(id);
+        if (r.IsSuccess) { Snackbar.Add("Conta excluída.", Severity.Success); await LoadAsync(); }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+}

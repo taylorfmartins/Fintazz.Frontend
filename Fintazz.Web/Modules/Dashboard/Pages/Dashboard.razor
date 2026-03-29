@@ -1,0 +1,148 @@
+@page "/"
+@inject DashboardService DashboardService
+@inject AppState AppState
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Dashboard — Fintazz</PageTitle>
+
+@if (!AppState.HasHouseHold)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        Nenhum grupo familiar selecionado.
+        <MudLink Href="/grupos" Class="ml-1">Selecionar ou criar grupo</MudLink>
+    </MudAlert>
+    return;
+}
+
+<div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-2">
+    <MudText Typo="Typo.h5" Class="fw-bold">Dashboard</MudText>
+    <div class="d-flex gap-2">
+        <MudSelect T="int" Value="_month" ValueChanged="OnMonthChanged" Label="Mês" Dense="true" Style="min-width:120px">
+            @for (int m = 1; m <= 12; m++)
+            {
+                var label = new DateTime(2000, m, 1).ToString("MMMM",
+                    System.Globalization.CultureInfo.GetCultureInfo("pt-BR"));
+                var val = m;
+                <MudSelectItem Value="@val">@label</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="int" Value="_year" ValueChanged="OnYearChanged" Label="Ano" Dense="true" Style="min-width:100px">
+            @for (int y = DateTime.Today.Year - 2; y <= DateTime.Today.Year + 1; y++)
+            {
+                var val = y;
+                <MudSelectItem Value="@val">@val</MudSelectItem>
+            }
+        </MudSelect>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="d-flex justify-center pa-8">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+    </div>
+}
+else if (_data is not null)
+{
+    <MudGrid>
+        <MudItem xs="12" sm="6" md="4">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <div class="d-flex align-center gap-3">
+                        <MudIcon Icon="@Icons.Material.Rounded.TrendingUp" Color="Color.Success" Size="Size.Large" />
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Receitas</MudText>
+                            <MudText Typo="Typo.h6" Color="Color.Success">@_data.TotalIncome.ToString("C2", _ptBr)</MudText>
+                        </div>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <div class="d-flex align-center gap-3">
+                        <MudIcon Icon="@Icons.Material.Rounded.TrendingDown" Color="Color.Error" Size="Size.Large" />
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Despesas</MudText>
+                            <MudText Typo="Typo.h6" Color="Color.Error">@_data.TotalExpense.ToString("C2", _ptBr)</MudText>
+                        </div>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <div class="d-flex align-center gap-3">
+                        <MudIcon Icon="@Icons.Material.Rounded.Balance"
+                                 Color="@(_data.Balance >= 0 ? Color.Primary : Color.Error)"
+                                 Size="Size.Large" />
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Saldo do Mês</MudText>
+                            <MudText Typo="Typo.h6"
+                                     Color="@(_data.Balance >= 0 ? Color.Primary : Color.Error)">
+                                @_data.Balance.ToString("C2", _ptBr)
+                            </MudText>
+                        </div>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="6">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <div class="d-flex align-center gap-3">
+                        <MudIcon Icon="@Icons.Material.Rounded.CreditCard" Color="Color.Warning" Size="Size.Large" />
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Faturas do Mês</MudText>
+                            <MudText Typo="Typo.h6" Color="Color.Warning">@_data.TotalCreditCardInvoices.ToString("C2", _ptBr)</MudText>
+                        </div>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="6">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <div class="d-flex align-center gap-3">
+                        <MudIcon Icon="@Icons.Material.Rounded.AccountBalance" Color="Color.Info" Size="Size.Large" />
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Saldo Bancário Total</MudText>
+                            <MudText Typo="Typo.h6" Color="Color.Info">@_data.BankAccountsTotalBalance.ToString("C2", _ptBr)</MudText>
+                        </div>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private MonthlyBalanceResponse? _data;
+    private bool _loading;
+    private int _month = DateTime.Today.Month;
+    private int _year = DateTime.Today.Year;
+    private readonly System.Globalization.CultureInfo _ptBr =
+        System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AppState.HasHouseHold)
+            await LoadAsync();
+    }
+
+    private async Task OnMonthChanged(int m) { _month = m; await LoadAsync(); }
+    private async Task OnYearChanged(int y) { _year = y; await LoadAsync(); }
+
+    private async Task LoadAsync()
+    {
+        if (!AppState.HasHouseHold) return;
+        _loading = true;
+        var result = await DashboardService.GetMonthlyBalanceAsync(AppState.HouseHoldId!.Value, _month, _year);
+        _loading = false;
+        if (result.IsSuccess) _data = result.Value;
+        else Snackbar.Add(result.Error!.Message, Severity.Error);
+    }
+}

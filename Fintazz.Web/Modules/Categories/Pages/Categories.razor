@@ -1,0 +1,116 @@
+@page "/categorias"
+@inject CategoryService CategoryService
+@inject AppState AppState
+@inject ISnackbar Snackbar
+
+<PageTitle>Categorias — Fintazz</PageTitle>
+
+@if (!AppState.HasHouseHold)
+{
+    <MudAlert Severity="Severity.Info">Selecione um grupo familiar primeiro. <MudLink Href="/grupos">Ir para grupos</MudLink></MudAlert>
+    return;
+}
+
+<div class="d-flex align-center justify-space-between mb-4">
+    <MudText Typo="Typo.h5" Class="fw-bold">Categorias</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add"
+               OnClick="OpenCreateDialog">Nova Categoria</MudButton>
+</div>
+
+@if (_loading)
+{
+    <div class="d-flex justify-center pa-8"><MudProgressCircular Indeterminate="true" /></div>
+}
+else
+{
+    <MudTable Items="_categories" Hover="true" Elevation="2" Dense="true">
+        <HeaderContent>
+            <MudTh>Nome</MudTh>
+            <MudTh>Tipo</MudTh>
+            <MudTh Style="width:100px"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.Name</MudTd>
+            <MudTd>
+                <MudChip T="string" Size="Size.Small"
+                         Color="@(context.Type == CategoryType.Income ? Color.Success : Color.Error)">
+                    @(context.Type == CategoryType.Income ? "Receita" : "Despesa")
+                </MudChip>
+            </MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Rounded.Edit" Size="Size.Small"
+                               OnClick="@(() => OpenEditDialog(context))" />
+                <MudIconButton Icon="@Icons.Material.Rounded.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => Delete(context.Id))" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Align="Align.Center" Class="pa-4" Color="Color.Secondary">Nenhuma categoria cadastrada.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+<MudDialog @bind-Visible="_showForm">
+    <TitleContent>@(_editing is null ? "Nova Categoria" : "Editar Categoria")</TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_formName" Label="Nome" Required="true" Class="mb-3" />
+        @if (_editing is null)
+        {
+            <MudSelect T="CategoryType" @bind-Value="_formType" Label="Tipo">
+                <MudSelectItem Value="CategoryType.Income">Receita</MudSelectItem>
+                <MudSelectItem Value="CategoryType.Expense">Despesa</MudSelectItem>
+            </MudSelect>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _showForm = false)">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_saving">
+            @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" /> }
+            Salvar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<CategoryResponse> _categories = [];
+    private bool _loading, _saving, _showForm;
+    private string _formName = string.Empty;
+    private CategoryType _formType = CategoryType.Expense;
+    private CategoryResponse? _editing;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var r = await CategoryService.GetByHouseHoldAsync(AppState.HouseHoldId!.Value);
+        _loading = false;
+        if (r.IsSuccess) _categories = r.Value!;
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private void OpenCreateDialog() { _editing = null; _formName = string.Empty; _formType = CategoryType.Expense; _showForm = true; }
+
+    private void OpenEditDialog(CategoryResponse c) { _editing = c; _formName = c.Name ?? string.Empty; _showForm = true; }
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(_formName)) return;
+        _saving = true;
+        Result r;
+        if (_editing is null)
+            r = await CategoryService.CreateAsync(new CreateCategoryRequest(AppState.HouseHoldId!.Value, _formName, _formType));
+        else
+            r = await CategoryService.UpdateAsync(_editing.Id, new UpdateCategoryRequest(_formName));
+        _saving = false;
+        if (r.IsSuccess) { Snackbar.Add("Categoria salva!", Severity.Success); _showForm = false; await LoadAsync(); }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private async Task Delete(Guid id)
+    {
+        var r = await CategoryService.DeleteAsync(id);
+        if (r.IsSuccess) { Snackbar.Add("Categoria excluída.", Severity.Success); await LoadAsync(); }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+}

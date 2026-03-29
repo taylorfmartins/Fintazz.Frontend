@@ -1,0 +1,95 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@inject AuthService AuthService
+@inject FintazzAuthStateProvider AuthStateProvider
+@inject TokenStorageService TokenStorage
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Login — Fintazz</PageTitle>
+
+<MudPaper Class="pa-6" Elevation="3" Style="width:100%;max-width:420px">
+    <MudText Typo="Typo.h5" Align="Align.Center" Class="mb-6">Fintazz</MudText>
+
+    <MudForm @ref="_form" @bind-IsValid="_isValid">
+        <MudTextField @bind-Value="_email"
+                      Label="E-mail"
+                      InputType="InputType.Email"
+                      Required="true"
+                      RequiredError="E-mail é obrigatório"
+                      Class="mb-3" />
+
+        <MudTextField @bind-Value="_password"
+                      Label="Senha"
+                      InputType="@_passwordType"
+                      Required="true"
+                      RequiredError="Senha é obrigatória"
+                      Adornment="Adornment.End"
+                      AdornmentIcon="@_passwordIcon"
+                      OnAdornmentClick="TogglePassword"
+                      Class="mb-4" />
+
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   FullWidth="true"
+                   Disabled="@_loading"
+                   OnClick="@DoLogin">
+            @if (_loading)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Entrar
+        </MudButton>
+    </MudForm>
+
+    <MudDivider Class="my-4" />
+
+    <MudText Align="Align.Center">
+        Não tem conta?
+        <MudLink Href="/cadastro">Cadastre-se</MudLink>
+    </MudText>
+</MudPaper>
+
+@code {
+    private MudForm _form = default!;
+    private string _email = string.Empty;
+    private string _password = string.Empty;
+    private bool _isValid;
+    private bool _loading;
+    private InputType _passwordType = InputType.Password;
+    private string _passwordIcon = Icons.Material.Filled.VisibilityOff;
+
+    private void TogglePassword()
+    {
+        if (_passwordType == InputType.Password)
+        {
+            _passwordType = InputType.Text;
+            _passwordIcon = Icons.Material.Filled.Visibility;
+        }
+        else
+        {
+            _passwordType = InputType.Password;
+            _passwordIcon = Icons.Material.Filled.VisibilityOff;
+        }
+    }
+
+    private async Task DoLogin()
+    {
+        await _form.ValidateAsync();
+        if (!_isValid) return;
+
+        _loading = true;
+        var result = await AuthService.LoginAsync(new LoginRequest(_email, _password));
+        _loading = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error!.Message, Severity.Error);
+            return;
+        }
+
+        await TokenStorage.SaveTokensAsync(result.Value!.AccessToken, result.Value.RefreshToken);
+        AuthStateProvider.NotifyUserLoggedIn(result.Value.AccessToken);
+        Navigation.NavigateTo("/");
+    }
+}

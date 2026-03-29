@@ -1,0 +1,209 @@
+@page "/transacoes"
+@inject TransactionService TransactionService
+@inject BankAccountService BankAccountService
+@inject CategoryService CategoryService
+@inject AppState AppState
+@inject ISnackbar Snackbar
+
+<PageTitle>Transações — Fintazz</PageTitle>
+
+@if (!AppState.HasHouseHold)
+{
+    <MudAlert Severity="Severity.Info">Selecione um grupo familiar primeiro. <MudLink Href="/grupos">Ir para grupos</MudLink></MudAlert>
+    return;
+}
+
+<div class="d-flex align-center justify-space-between mb-4 flex-wrap gap-2">
+    <MudText Typo="Typo.h5" Class="fw-bold">Transações</MudText>
+    <div class="d-flex gap-2 flex-wrap">
+        <MudDatePicker @bind-Date="_startDate" Label="De" Editable="true" DateFormat="dd/MM/yyyy"
+                       Class="narrow-date" />
+        <MudDatePicker @bind-Date="_endDate" Label="Até" Editable="true" DateFormat="dd/MM/yyyy"
+                       Class="narrow-date" />
+        <MudButton Variant="Variant.Outlined" OnClick="LoadAsync">Filtrar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add"
+                   OnClick="OpenCreateDialog">Nova</MudButton>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="d-flex justify-center pa-8"><MudProgressCircular Indeterminate="true" /></div>
+}
+else
+{
+    <MudTable Items="_transactions" Hover="true" Elevation="2" Dense="true">
+        <HeaderContent>
+            <MudTh>Data</MudTh>
+            <MudTh>Descrição</MudTh>
+            <MudTh>Conta</MudTh>
+            <MudTh>Categoria</MudTh>
+            <MudTh>Tipo</MudTh>
+            <MudTh>Valor</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh Style="width:100px"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.Date.ToString("dd/MM/yyyy")</MudTd>
+            <MudTd>@(context.Description ?? "—")</MudTd>
+            <MudTd>@(context.BankAccountName ?? "—")</MudTd>
+            <MudTd>@(context.CategoryName ?? "—")</MudTd>
+            <MudTd>
+                <MudChip T="string" Size="Size.Small"
+                         Color="@(context.Type == TransactionType.Income ? Color.Success : Color.Error)">
+                    @TypeLabel(context.Type)
+                </MudChip>
+            </MudTd>
+            <MudTd>
+                <MudText Color="@(context.Type == TransactionType.Income ? Color.Success : Color.Error)">
+                    @context.Amount.ToString("C2", _ptBr)
+                </MudText>
+            </MudTd>
+            <MudTd>
+                @if (context.IsPaid)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success">Pago</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning">Previsto</MudChip>
+                }
+            </MudTd>
+            <MudTd>
+                @if (!context.IsPaid)
+                {
+                    <MudIconButton Icon="@Icons.Material.Rounded.CheckCircle" Size="Size.Small" Color="Color.Success"
+                                   OnClick="@(() => Pay(context.Id))" Title="Marcar como pago" />
+                }
+                <MudIconButton Icon="@Icons.Material.Rounded.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => Delete(context.Id))" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Align="Align.Center" Class="pa-4" Color="Color.Secondary">Nenhuma transação encontrada.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+<MudDialog @bind-Visible="_showForm" Options="@(new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true })">
+    <TitleContent>Nova Transação</TitleContent>
+    <DialogContent>
+        <MudSelect T="Guid" @bind-Value="_formBankAccountId" Label="Conta Bancária" Required="true" Class="mb-3">
+            @foreach (var a in _accounts)
+            {
+                <MudSelectItem Value="@a.Id">@a.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField @bind-Value="_formDescription" Label="Descrição" Class="mb-3" />
+        <MudNumericField @bind-Value="_formAmount" Label="Valor" Format="F2" Culture="_ptBr"
+                         Adornment="Adornment.Start" AdornmentText="R$" Class="mb-3" />
+        <MudSelect T="TransactionType" @bind-Value="_formType" Label="Tipo" Class="mb-3">
+            <MudSelectItem Value="TransactionType.Income">Receita</MudSelectItem>
+            <MudSelectItem Value="TransactionType.Expense">Despesa</MudSelectItem>
+            <MudSelectItem Value="TransactionType.Subscription">Assinatura</MudSelectItem>
+        </MudSelect>
+        <MudDatePicker @bind-Date="_formDate" Label="Data" Editable="true" DateFormat="dd/MM/yyyy" Class="mb-3" />
+        <MudSelect T="Guid?" @bind-Value="_formCategoryId" Label="Categoria (opcional)" Class="mb-3">
+            <MudSelectItem T="Guid?" Value="@((Guid?)null)">— Nenhuma —</MudSelectItem>
+            @foreach (var c in _categories)
+            {
+                <MudSelectItem T="Guid?" Value="@((Guid?)c.Id)">@c.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudCheckBox @bind-Value="_formIsPaid" Label="Já foi pago" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _showForm = false)">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_saving">
+            @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" /> }
+            Salvar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private TransactionResponsePagedResult? _pagedResult;
+    private List<TransactionResponse> _transactions = [];
+    private List<BankAccountResponse> _accounts = [];
+    private List<CategoryResponse> _categories = [];
+    private bool _loading, _saving, _showForm;
+    private DateTime? _startDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime? _endDate = DateTime.Today;
+    private Guid _formBankAccountId;
+    private string _formDescription = string.Empty;
+    private decimal _formAmount;
+    private TransactionType _formType = TransactionType.Expense;
+    private DateTime? _formDate = DateTime.Today;
+    private Guid? _formCategoryId;
+    private bool _formIsPaid;
+    private readonly System.Globalization.CultureInfo _ptBr =
+        System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadAsync(), LoadSupportDataAsync());
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var r = await TransactionService.GetByHouseHoldAsync(AppState.HouseHoldId!.Value, startDate: _startDate, endDate: _endDate);
+        _loading = false;
+        if (r.IsSuccess) { _pagedResult = r.Value; _transactions = r.Value!.Items ?? []; }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private async Task LoadSupportDataAsync()
+    {
+        var accounts = await BankAccountService.GetByHouseHoldAsync(AppState.HouseHoldId!.Value);
+        if (accounts.IsSuccess) _accounts = accounts.Value!;
+        var categories = await CategoryService.GetByHouseHoldAsync(AppState.HouseHoldId!.Value);
+        if (categories.IsSuccess) _categories = categories.Value!;
+        if (_accounts.Count > 0) _formBankAccountId = _accounts[0].Id;
+    }
+
+    private void OpenCreateDialog()
+    {
+        _formDescription = string.Empty;
+        _formAmount = 0;
+        _formType = TransactionType.Expense;
+        _formDate = DateTime.Today;
+        _formCategoryId = null;
+        _formIsPaid = false;
+        if (_accounts.Count > 0) _formBankAccountId = _accounts[0].Id;
+        _showForm = true;
+    }
+
+    private async Task Save()
+    {
+        if (_formBankAccountId == Guid.Empty || _formAmount <= 0 || _formDate is null) return;
+        _saving = true;
+        var r = await TransactionService.CreateAsync(new AddTransactionCommand(
+            AppState.HouseHoldId!.Value, _formBankAccountId, _formDescription,
+            _formAmount, _formDate.Value, _formType, _formIsPaid, _formCategoryId));
+        _saving = false;
+        if (r.IsSuccess) { Snackbar.Add("Transação salva!", Severity.Success); _showForm = false; await LoadAsync(); }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private async Task Pay(Guid id)
+    {
+        var r = await TransactionService.PayAsync(id);
+        if (r.IsSuccess) { Snackbar.Add("Marcada como paga!", Severity.Success); await LoadAsync(); }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private async Task Delete(Guid id)
+    {
+        var r = await TransactionService.DeleteAsync(id);
+        if (r.IsSuccess) { Snackbar.Add("Transação excluída.", Severity.Success); await LoadAsync(); }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private static string TypeLabel(TransactionType t) => t switch
+    {
+        TransactionType.Income => "Receita",
+        TransactionType.Expense => "Despesa",
+        _ => "Transferência"
+    };
+}
