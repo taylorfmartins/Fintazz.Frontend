@@ -1,0 +1,86 @@
+@inherits LayoutComponentBase
+
+<MudThemeProvider Theme="_theme" IsDarkMode="_darkMode" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<div class="landing-page">
+    <header class="landing-header">
+        <MudContainer MaxWidth="MaxWidth.Large">
+            <div class="d-flex align-center justify-space-between py-3">
+                <MudText Typo="Typo.h5" Class="fw-bold" Color="Color.Primary">Fintazz</MudText>
+                <div class="d-flex align-center gap-2">
+                    <MudIconButton Icon="@(_darkMode ? Icons.Material.Rounded.LightMode : Icons.Material.Rounded.DarkMode)"
+                                   Color="Color.Default" OnClick="ToggleTheme" Size="Size.Small" />
+                    <MudButton Href="/login" Variant="Variant.Text" Color="Color.Primary" Size="Size.Small">
+                        Entrar
+                    </MudButton>
+                    <MudButton Href="/cadastro" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                               Class="d-none d-sm-flex">
+                        Criar conta
+                    </MudButton>
+                </div>
+            </div>
+        </MudContainer>
+    </header>
+
+    @Body
+</div>
+
+@code {
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private bool _darkMode = true;
+
+    private readonly MudTheme _theme = new()
+    {
+        Typography = new Typography
+        {
+            Default = new DefaultTypography
+            {
+                FontFamily = ["Inter", "Roboto", "sans-serif"]
+            }
+        },
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#6C63FF",
+            PrimaryDarken = "#5A52E0",
+            PrimaryLighten = "#8B84FF",
+            Secondary = "#FF6584",
+            Tertiary = "#43D9AD",
+            Background = "#F8F9FC",
+            Surface = "#FFFFFF",
+            TextPrimary = "#1A1A2E",
+            TextSecondary = "#6B7280"
+        },
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#7C74FF",
+            PrimaryDarken = "#6C63FF",
+            PrimaryLighten = "#9D97FF",
+            Secondary = "#FF6584",
+            Tertiary = "#43D9AD",
+            Background = "#0F0F1A",
+            Surface = "#1A1A2E",
+            TextPrimary = "#E5E7EB",
+            TextSecondary = "#9CA3AF"
+        }
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var saved = await JS.InvokeAsync<string?>("localStorage.getItem", "fintazz_darkmode");
+            _darkMode = saved != "false";
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleTheme()
+    {
+        _darkMode = !_darkMode;
+        await JS.InvokeVoidAsync("localStorage.setItem", "fintazz_darkmode", _darkMode.ToString().ToLower());
+    }
+}

@@ -1,0 +1,216 @@
+@page "/transacoes-recorrentes"
+@inject RecurringChargeService RecurringChargeService
+@inject BankAccountService BankAccountService
+@inject CreditCardService CreditCardService
+@inject CategoryService CategoryService
+@inject AppState AppState
+@inject ISnackbar Snackbar
+
+<PageTitle>Cobranças Recorrentes — Fintazz</PageTitle>
+
+@if (!AppState.HasHouseHold)
+{
+    <MudAlert Severity="Severity.Info">Selecione um grupo familiar primeiro. <MudLink Href="/grupos">Ir para grupos</MudLink></MudAlert>
+    return;
+}
+
+<div class="d-flex align-center justify-space-between mb-4">
+    <MudText Typo="Typo.h5" Class="fw-bold">Cobranças Recorrentes</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add"
+               OnClick="OpenCreateDialog">Nova Recorrência</MudButton>
+</div>
+
+@if (_loading)
+{
+    <div class="d-flex justify-center pa-8"><MudProgressCircular Indeterminate="true" /></div>
+}
+else
+{
+    <MudTable Items="_charges" Hover="true" Elevation="2" Dense="true">
+        <HeaderContent>
+            <MudTh>Descrição</MudTh>
+            <MudTh>Valor</MudTh>
+            <MudTh>Dia</MudTh>
+            <MudTh>Pagamento</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh Style="width:160px"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@(context.Description ?? "—")</MudTd>
+            <MudTd>@context.Amount.ToString("C2", _ptBr) @(context.IsVariableAmount ? "(variável)" : "")</MudTd>
+            <MudTd>Dia @context.BillingDay</MudTd>
+            <MudTd>
+                @if (context.CreditCardName is not null) { <MudText>@context.CreditCardName</MudText> }
+                else if (context.BankAccountName is not null) { <MudText>@context.BankAccountName</MudText> }
+                else { <MudText Color="Color.Secondary">—</MudText> }
+            </MudTd>
+            <MudTd>
+                <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">
+                    @(context.IsActive ? "Ativa" : "Inativa")
+                </MudChip>
+            </MudTd>
+            <MudTd>
+                @if (!context.AutoApprove && context.IsActive)
+                {
+                    <MudIconButton Icon="@Icons.Material.Rounded.PlayArrow" Size="Size.Small" Color="Color.Success"
+                                   Title="Aprovar" OnClick="@(() => Approve(context))" />
+                }
+                @if (context.IsActive)
+                {
+                    <MudIconButton Icon="@Icons.Material.Rounded.PauseCircle" Size="Size.Small" Color="Color.Warning"
+                                   Title="Cancelar" OnClick="@(() => Cancel(context.Id))" />
+                }
+                else
+                {
+                    <MudIconButton Icon="@Icons.Material.Rounded.PlayCircle" Size="Size.Small" Color="Color.Success"
+                                   Title="Reativar" OnClick="@(() => Reactivate(context.Id))" />
+                }
+                <MudIconButton Icon="@Icons.Material.Rounded.Edit" Size="Size.Small"
+                               OnClick="@(() => OpenEditDialog(context))" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Align="Align.Center" Class="pa-4" Color="Color.Secondary">Nenhuma cobrança recorrente cadastrada.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+@* Dialog: Criar *@
+<MudDialog @bind-Visible="_showForm" Options="@(new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true })">
+    <TitleContent>@(_editing is null ? "Nova Recorrência" : "Editar Recorrência")</TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_formDescription" Label="Descrição (ex: Netflix)" Class="mb-3" />
+        <MudNumericField @bind-Value="_formAmount" Label="Valor" Format="F2" Culture="_ptBr"
+                         Adornment="Adornment.Start" AdornmentText="R$" Class="mb-3" />
+        <MudNumericField @bind-Value="_formBillingDay" Label="Dia do mês" Min="1" Max="31" Class="mb-3" />
+        <MudSelect T="Guid?" @bind-Value="_formCategoryId" Label="Categoria (opcional)" Class="mb-3">
+            <MudSelectItem T="Guid?" Value="@((Guid?)null)">— Nenhuma —</MudSelectItem>
+            @foreach (var c in _categories) { <MudSelectItem T="Guid?" Value="@((Guid?)c.Id)">@c.Name</MudSelectItem> }
+        </MudSelect>
+        @if (_editing is null)
+        {
+            <MudSelect T="Guid?" @bind-Value="_formBankAccountId" Label="Conta Bancária (débito)" Class="mb-3">
+                <MudSelectItem T="Guid?" Value="@((Guid?)null)">— Nenhuma —</MudSelectItem>
+                @foreach (var a in _accounts) { <MudSelectItem T="Guid?" Value="@((Guid?)a.Id)">@a.Name</MudSelectItem> }
+            </MudSelect>
+            <MudSelect T="Guid?" @bind-Value="_formCreditCardId" Label="Cartão de Crédito" Class="mb-3">
+                <MudSelectItem T="Guid?" Value="@((Guid?)null)">— Nenhum —</MudSelectItem>
+                @foreach (var c in _cards) { <MudSelectItem T="Guid?" Value="@((Guid?)c.Id)">@c.Name</MudSelectItem> }
+            </MudSelect>
+            <MudCheckBox @bind-Value="_formIsVariable" Label="Valor variável" Class="mb-2" />
+            <MudCheckBox @bind-Value="_formAutoApprove" Label="Aprovação automática" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _showForm = false)">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_saving">
+            @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" /> }
+            Salvar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* Dialog: Aprovar (valor variável) *@
+<MudDialog @bind-Visible="_showApprove">
+    <TitleContent>Aprovar — @_approvingCharge?.Description</TitleContent>
+    <DialogContent>
+        @if (_approvingCharge?.IsVariableAmount ?? false)
+        {
+            <MudNumericField @bind-Value="_approveAmount" Label="Valor deste mês" Format="F2"
+                             Culture="_ptBr" Adornment="Adornment.Start" AdornmentText="R$" />
+        }
+        else
+        {
+            <MudText>Confirmar lançamento de @_approvingCharge?.Amount.ToString("C2", _ptBr)?</MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _showApprove = false)">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ConfirmApprove" Disabled="_saving">
+            Confirmar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<RecurringChargeResponse> _charges = [];
+    private List<BankAccountResponse> _accounts = [];
+    private List<CreditCardResponse> _cards = [];
+    private List<CategoryResponse> _categories = [];
+    private bool _loading, _saving, _showForm, _showApprove;
+    private RecurringChargeResponse? _editing, _approvingCharge;
+    private string _formDescription = string.Empty;
+    private decimal _formAmount, _approveAmount;
+    private int _formBillingDay = 1;
+    private Guid? _formCategoryId, _formBankAccountId, _formCreditCardId;
+    private bool _formIsVariable, _formAutoApprove;
+    private readonly System.Globalization.CultureInfo _ptBr =
+        System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadAsync(), LoadSupportAsync());
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var r = await RecurringChargeService.GetByHouseHoldAsync(AppState.HouseHoldId!.Value);
+        _loading = false;
+        if (r.IsSuccess) _charges = r.Value!;
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private async Task LoadSupportAsync()
+    {
+        var a = await BankAccountService.GetByHouseHoldAsync(AppState.HouseHoldId!.Value);
+        if (a.IsSuccess) _accounts = a.Value!;
+        var c = await CreditCardService.GetByHouseHoldAsync(AppState.HouseHoldId!.Value);
+        if (c.IsSuccess) _cards = c.Value!;
+        var cat = await CategoryService.GetByHouseHoldAsync(AppState.HouseHoldId!.Value);
+        if (cat.IsSuccess) _categories = cat.Value!;
+    }
+
+    private void OpenCreateDialog() { _editing = null; _formDescription = string.Empty; _formAmount = 0; _formBillingDay = 1; _formCategoryId = null; _formBankAccountId = null; _formCreditCardId = null; _formIsVariable = false; _formAutoApprove = true; _showForm = true; }
+
+    private void OpenEditDialog(RecurringChargeResponse c) { _editing = c; _formDescription = c.Description ?? string.Empty; _formAmount = c.Amount; _formBillingDay = c.BillingDay; _formCategoryId = c.CategoryId; _showForm = true; }
+
+    private async Task Save()
+    {
+        _saving = true;
+        Result r;
+        if (_editing is null)
+            r = await RecurringChargeService.CreateAsync(new CreateRecurringChargeCommand(AppState.HouseHoldId!.Value, _formDescription, _formAmount, _formBillingDay, _formCategoryId, _formBankAccountId, _formCreditCardId, _formIsVariable, _formAutoApprove));
+        else
+            r = await RecurringChargeService.UpdateAsync(_editing.Id, new UpdateRecurringChargeRequest(_formDescription, _formAmount, _formCategoryId));
+        _saving = false;
+        if (r.IsSuccess) { Snackbar.Add("Salvo!", Severity.Success); _showForm = false; await LoadAsync(); }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private async Task Cancel(Guid id)
+    {
+        var r = await RecurringChargeService.DeleteAsync(id);
+        if (r.IsSuccess) { Snackbar.Add("Cancelada.", Severity.Success); await LoadAsync(); }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private async Task Reactivate(Guid id)
+    {
+        var r = await RecurringChargeService.ReactivateAsync(id);
+        if (r.IsSuccess) { Snackbar.Add("Reativada!", Severity.Success); await LoadAsync(); }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private void Approve(RecurringChargeResponse c) { _approvingCharge = c; _approveAmount = c.Amount; _showApprove = true; }
+
+    private async Task ConfirmApprove()
+    {
+        _saving = true;
+        var amount = _approvingCharge!.IsVariableAmount ? (decimal?)_approveAmount : null;
+        var r = await RecurringChargeService.ApproveAsync(_approvingCharge.Id, new ApproveRecurringChargeRequest(amount));
+        _saving = false;
+        if (r.IsSuccess) { Snackbar.Add("Aprovado!", Severity.Success); _showApprove = false; await LoadAsync(); }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+}

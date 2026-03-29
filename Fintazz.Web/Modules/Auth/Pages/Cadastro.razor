@@ -1,0 +1,142 @@
+@page "/cadastro"
+@attribute [AllowAnonymous]
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Cadastro — Fintazz</PageTitle>
+
+<MudPaper Class="pa-6" Elevation="3" Style="width:100%;max-width:480px">
+    <MudText Typo="Typo.h5" Align="Align.Center" Class="mb-6">Criar Conta</MudText>
+
+    <MudForm @ref="_form" @bind-IsValid="_isValid">
+        <MudTextField @bind-Value="_fullName"
+                      Label="Nome Completo"
+                      Required="true"
+                      RequiredError="Nome é obrigatório"
+                      Class="mb-3" />
+
+        <MudTextField @bind-Value="_nickname"
+                      Label="Apelido"
+                      Required="true"
+                      RequiredError="Apelido é obrigatório"
+                      Class="mb-3" />
+
+        <MudTextField @bind-Value="_email"
+                      Label="E-mail"
+                      InputType="InputType.Email"
+                      Required="true"
+                      RequiredError="E-mail é obrigatório"
+                      Class="mb-3" />
+
+        <MudTextField @bind-Value="_birthDateText"
+                      Label="Data de Nascimento"
+                      Placeholder="dd/MM/yyyy"
+                      Mask="@(new PatternMask("00/00/0000"))"
+                      Required="true"
+                      RequiredError="Data de nascimento é obrigatória"
+                      Validation="@((string v) => ValidateBirthDate(v))"
+                      Class="mb-3" />
+
+        <MudTextField @bind-Value="_password"
+                      Label="Senha"
+                      InputType="@_passwordType"
+                      Required="true"
+                      RequiredError="Senha é obrigatória"
+                      Validation="@((string v) => v.Length >= 8 ? null : "Mínimo 8 caracteres")"
+                      Adornment="Adornment.End"
+                      AdornmentIcon="@_passwordIcon"
+                      OnAdornmentClick="TogglePassword"
+                      Class="mb-4" />
+
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   FullWidth="true"
+                   Disabled="@_loading"
+                   OnClick="@DoRegister">
+            @if (_loading)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Cadastrar
+        </MudButton>
+    </MudForm>
+
+    <MudDivider Class="my-4" />
+
+    <MudText Align="Align.Center">
+        Já tem conta?
+        <MudLink Href="/login">Entrar</MudLink>
+    </MudText>
+</MudPaper>
+
+@code {
+    private MudForm _form = default!;
+    private string _fullName = string.Empty;
+    private string _nickname = string.Empty;
+    private string _email = string.Empty;
+    private string _birthDateText = string.Empty;
+    private string _password = string.Empty;
+    private bool _isValid;
+    private bool _loading;
+    private InputType _passwordType = InputType.Password;
+    private string _passwordIcon = Icons.Material.Filled.VisibilityOff;
+
+    private void TogglePassword()
+    {
+        if (_passwordType == InputType.Password)
+        {
+            _passwordType = InputType.Text;
+            _passwordIcon = Icons.Material.Filled.Visibility;
+        }
+        else
+        {
+            _passwordType = InputType.Password;
+            _passwordIcon = Icons.Material.Filled.VisibilityOff;
+        }
+    }
+
+    private string? ValidateBirthDate(string value)
+    {
+        if (!DateTime.TryParseExact(value, "dd/MM/yyyy",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var date))
+            return "Data inválida";
+
+        if (date > DateTime.Today.AddYears(-18))
+            return "Você deve ter pelo menos 18 anos";
+
+        return null;
+    }
+
+    private async Task DoRegister()
+    {
+        await _form.ValidateAsync();
+        if (!_isValid) return;
+
+        if (!DateTime.TryParseExact(_birthDateText, "dd/MM/yyyy",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var birthDate))
+            return;
+
+        _loading = true;
+        var request = new RegisterRequest(
+            _fullName,
+            _nickname,  // serializa como nickName
+            _email,
+            DateOnly.FromDateTime(birthDate),
+            _password);
+
+        var result = await AuthService.RegisterAsync(request);
+        _loading = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error!.Message, Severity.Error);
+            return;
+        }
+
+        Snackbar.Add("Conta criada com sucesso! Faça login.", Severity.Success);
+        Navigation.NavigateTo("/login");
+    }
+}
