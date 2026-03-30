@@ -11,7 +11,7 @@
             <MudAppBar Elevation="0" Dense="false">
                 <MudIconButton Icon="@Icons.Material.Rounded.Menu" Color="Color.Inherit" Edge="Edge.Start"
                                OnClick="@ToggleDrawer" />
-                <MudText Typo="Typo.h6" Class="ml-2 fw-bold">Fintazz</MudText>
+                <img src="icon-192.png" alt="Fintazz" style="height:32px;width:32px;margin-left:8px;" />
                 @if (AppState.HasHouseHold)
                 {
                     <MudChip T="string" Icon="@Icons.Material.Rounded.Groups" Size="Size.Small"
@@ -32,7 +32,10 @@
             <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="0"
                        Variant="DrawerVariant.Responsive">
                 <MudDrawerHeader>
-                    <MudText Typo="Typo.h6" Class="fw-bold">Fintazz</MudText>
+                    <div class="d-flex align-center gap-2">
+                        <img src="icon-192.png" alt="Fintazz" style="height:36px;width:36px;" />
+                        <MudText Typo="Typo.h6" Class="fw-bold">Fintazz</MudText>
+                    </div>
                 </MudDrawerHeader>
                 <NavMenu />
             </MudDrawer>
@@ -133,6 +136,9 @@
     private async Task Logout()
     {
         await TokenStorage.ClearAsync();
+        AppState.Clear();
+        await JS.InvokeVoidAsync("localStorage.removeItem", "fintazz_household_id");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "fintazz_household_name");
         AuthStateProvider.NotifyUserLoggedOut();
         Navigation.NavigateTo("/");
     }

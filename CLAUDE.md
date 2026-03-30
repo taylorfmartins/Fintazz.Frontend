@@ -191,6 +191,7 @@ Snackbar.Add("Conta criada com sucesso!", Severity.Success);
 - **Grupos Familiares**
 	- Ao enviar e-mail com o convite do grupo para o usuário, ao clicar em entrar no grupo no link do e-mail, irá trazer o usuário para o sistema: precisa fazer cadastro se não tiver conta ou entrar no grupo automaticamente se já autenticado.
 
+
 ## Melhorias Implementadas
 
 - **Tela de Registros** ✅
@@ -210,3 +211,8 @@ Snackbar.Add("Conta criada com sucesso!", Severity.Success);
 	- Subcategorias: registradas dentro de uma categoria pai; botão "Nova Subcategoria" em cada linha
 	- Categorias de sistema exibem badge "Sistema" e não podem ser editadas ou excluídas
 	- Categorias agrupadas por tipo (Despesas / Receitas) com subcategorias indentadas
+
+- **Tela de Landing Page** ✅
+	- Redirect automático para `/dashboard` se usuário já autenticado (access token válido ou refresh token presente)
+	- Login e Cadastro usam `LandingLayout` — sem sidebar ao acessar essas páginas
+	- Login e Cadastro redirecionam para `/dashboard` se usuário já autenticado

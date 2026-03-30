@@ -9,7 +9,10 @@
     <header class="landing-header">
         <MudContainer MaxWidth="MaxWidth.Large">
             <div class="d-flex align-center justify-space-between py-3">
-                <MudText Typo="Typo.h5" Class="fw-bold" Color="Color.Primary">Fintazz</MudText>
+                <div class="d-flex align-center gap-2">
+                    <img src="icon-192.png" alt="Fintazz" style="height:36px;width:36px;" />
+                    <MudText Typo="Typo.h5" Class="fw-bold" Color="Color.Primary">Fintazz</MudText>
+                </div>
                 <div class="d-flex align-center gap-2">
                     <MudIconButton Icon="@(_darkMode ? Icons.Material.Rounded.LightMode : Icons.Material.Rounded.DarkMode)"
                                    Color="Color.Default" OnClick="ToggleTheme" Size="Size.Small" />

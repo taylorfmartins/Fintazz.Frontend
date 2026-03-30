@@ -1,6 +1,6 @@
 {
-  "name": "Fintazz.Web",
-  "short_name": "Fintazz.Web",
+  "name": "Fintazz",
+  "short_name": "Fintazz",
   "id": "./",
   "start_url": "./",
   "display": "standalone",

@@ -1,6 +1,9 @@
 @page "/"
 @layout LandingLayout
 @attribute [AllowAnonymous]
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject TokenStorageService TokenStorage
 
 <PageTitle>Fintazz — Controle financeiro inteligente</PageTitle>
 
@@ -197,6 +200,24 @@
 </footer>
 
 @code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo("/dashboard", replace: true);
+            return;
+        }
+
+        // Access token pode estar expirado mas refresh token ainda válido.
+        // Redireciona assim mesmo — AuthorizationMessageHandler renova o token automaticamente.
+        var refreshToken = await TokenStorage.GetRefreshTokenAsync();
+        if (!string.IsNullOrWhiteSpace(refreshToken))
+            Navigation.NavigateTo("/dashboard", replace: true);
+    }
+
     private record Feature(string Icon, string Title, string Description, Color AvatarColor);
 
     private readonly Feature[] _features =

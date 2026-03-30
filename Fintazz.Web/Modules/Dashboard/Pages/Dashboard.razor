@@ -262,7 +262,20 @@ else if (_data is not null)
         _loading = true;
         var result = await DashboardService.GetMonthlyBalanceAsync(AppState.HouseHoldId!.Value, _month, _year);
         _loading = false;
-        if (result.IsSuccess) _data = result.Value;
-        else Snackbar.Add(result.Error!.Message, Severity.Error);
+        if (result.IsSuccess)
+        {
+            _data = result.Value;
+        }
+        else if (result.Error?.Code == "HouseHold.NotFound")
+        {
+            AppState.Clear();
+            await JS.InvokeVoidAsync("localStorage.removeItem", "fintazz_household_id");
+            await JS.InvokeVoidAsync("localStorage.removeItem", "fintazz_household_name");
+            await LoadGroupsForSetupAsync();
+        }
+        else
+        {
+            Snackbar.Add(result.Error!.Message, Severity.Error);
+        }
     }
 }

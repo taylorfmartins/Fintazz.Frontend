@@ -1,4 +1,5 @@
 @page "/cadastro"
+@layout LandingLayout
 @attribute [AllowAnonymous]
 @inject AuthService AuthService
 @inject FintazzAuthStateProvider AuthStateProvider
@@ -76,6 +77,23 @@
 @code {
     private MudForm _form = default!;
     private string _fullName = string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo("/dashboard", replace: true);
+            return;
+        }
+
+        var refreshToken = await TokenStorage.GetRefreshTokenAsync();
+        if (!string.IsNullOrWhiteSpace(refreshToken))
+            Navigation.NavigateTo("/dashboard", replace: true);
+    }
+
     private string _nickname = string.Empty;
     private string _email = string.Empty;
     private string _birthDateText = string.Empty;

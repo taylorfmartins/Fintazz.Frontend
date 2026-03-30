@@ -7,6 +7,7 @@ using Fintazz.Web.Modules.Dashboard;
 using Fintazz.Web.Modules.HouseHolds;
 using Fintazz.Web.Modules.RecurringCharges;
 using Fintazz.Web.Modules.Transactions;
+using Fintazz.Web.Modules.Admin;
 using Fintazz.Web.Modules.Users;
 using Fintazz.Web.Services;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -52,6 +53,7 @@ builder.Services.AddScoped<TransactionService>();
 builder.Services.AddScoped<RecurringChargeService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<AdminService>();
 
 // MudBlazor
 builder.Services.AddMudServices();

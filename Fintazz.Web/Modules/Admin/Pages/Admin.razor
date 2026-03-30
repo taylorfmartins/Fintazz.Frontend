@@ -1,0 +1,154 @@
+@page "/admin"
+@attribute [Authorize(Roles = "admin")]
+@inject AdminService AdminService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>Admin — Fintazz</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-6">
+    <MudText Typo="Typo.h5" Class="fw-bold">Painel Admin</MudText>
+    <div class="d-flex gap-2">
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.Refresh"
+                   OnClick="LoadAll" Disabled="_loadingStats || _loadingUsers">Atualizar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                   StartIcon="@Icons.Material.Rounded.OpenInNew"
+                   OnClick="OpenHangfireDashboard" Disabled="_openingDashboard">
+            @if (_openingDashboard)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+            }
+            Abrir Dashboard
+        </MudButton>
+    </div>
+</div>
+
+@* Stats de Jobs *@
+<MudText Typo="Typo.h6" Class="mb-3">Jobs — Hangfire</MudText>
+
+@if (_loadingStats)
+{
+    <MudGrid Class="mb-6">
+        @for (int i = 0; i < 5; i++)
+        {
+            <MudItem xs="12" sm="6" md="4" lg="2">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="110px" />
+            </MudItem>
+        }
+    </MudGrid>
+}
+else if (_stats is not null)
+{
+    <MudGrid Class="mb-2">
+        <MudItem xs="6" sm="4" md="2">
+            @StatCard("Enfileirados", _stats.Enqueued, Icons.Material.Rounded.Queue, Color.Info)
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            @StatCard("Em Execução", _stats.Processing, Icons.Material.Rounded.Sync, Color.Warning)
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            @StatCard("Concluídos", _stats.Succeeded, Icons.Material.Rounded.CheckCircle, Color.Success)
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            @StatCard("Falharam", _stats.Failed, Icons.Material.Rounded.Error, Color.Error)
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            @StatCard("Agendados", _stats.Scheduled, Icons.Material.Rounded.Schedule, Color.Default)
+        </MudItem>
+    </MudGrid>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-6">
+        Atualizado em @_lastRefresh.ToString("HH:mm:ss")
+    </MudText>
+}
+
+@* Gerenciamento de usuários *@
+<MudText Typo="Typo.h6" Class="mb-3">Usuários</MudText>
+
+@if (_loadingUsers)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_users" Hover="true" Elevation="2" Dense="true">
+        <HeaderContent>
+            <MudTh>Nome</MudTh>
+            <MudTh>Apelido</MudTh>
+            <MudTh>E-mail</MudTh>
+            <MudTh Style="width:100px">Admin</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.FullName</MudTd>
+            <MudTd>@context.NickName</MudTd>
+            <MudTd>@context.Email</MudTd>
+            <MudTd>
+                <MudSwitch T="bool" Value="@context.IsAdmin" Color="Color.Warning"
+                           ValueChanged="@(v => ToggleAdmin(context, v))" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Align="Align.Center" Class="pa-4" Color="Color.Secondary">Nenhum usuário encontrado.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    private JobStatsResponse? _stats;
+    private List<UserSummaryResponse> _users = [];
+    private bool _loadingStats, _loadingUsers, _openingDashboard;
+    private DateTime _lastRefresh;
+
+    private RenderFragment StatCard(string label, long value, string icon, Color color) => __builder =>
+    {
+        <MudCard Elevation="2">
+            <MudCardContent Class="d-flex flex-column align-center pa-4">
+                <MudIcon Icon="@icon" Color="@color" Size="Size.Large" Class="mb-1" />
+                <MudText Typo="Typo.h4">@value</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@label</MudText>
+            </MudCardContent>
+        </MudCard>
+    };
+
+    protected override async Task OnInitializedAsync() => await LoadAll();
+
+    private async Task LoadAll() => await Task.WhenAll(LoadStats(), LoadUsers());
+
+    private async Task LoadStats()
+    {
+        _loadingStats = true;
+        var r = await AdminService.GetJobStatsAsync();
+        _loadingStats = false;
+        if (r.IsSuccess) { _stats = r.Value; _lastRefresh = DateTime.Now; }
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private async Task LoadUsers()
+    {
+        _loadingUsers = true;
+        var r = await AdminService.GetUsersAsync();
+        _loadingUsers = false;
+        if (r.IsSuccess) _users = r.Value!;
+        else Snackbar.Add(r.Error!.Message, Severity.Error);
+    }
+
+    private async Task ToggleAdmin(UserSummaryResponse user, bool grant)
+    {
+        var r = grant
+            ? await AdminService.GrantAdminAsync(user.Id)
+            : await AdminService.RevokeAdminAsync(user.Id);
+
+        if (!r.IsSuccess) { Snackbar.Add(r.Error!.Message, Severity.Error); return; }
+
+        Snackbar.Add(grant ? $"{user.NickName} agora é admin." : $"Admin removido de {user.NickName}.", Severity.Success);
+        await LoadUsers();
+    }
+
+    private async Task OpenHangfireDashboard()
+    {
+        _openingDashboard = true;
+        var r = await AdminService.GetHangfireEntryUrlAsync();
+        _openingDashboard = false;
+        if (!r.IsSuccess) { Snackbar.Add(r.Error!.Message, Severity.Error); return; }
+        await JS.InvokeVoidAsync("open", r.Value, "_blank");
+    }
+}
